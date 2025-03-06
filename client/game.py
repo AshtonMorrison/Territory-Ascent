@@ -14,12 +14,16 @@ class GameClient:
         self.clock = pygame.time.Clock()
 
         # Player Setup
-        self.all_sprites = pygame.sprite.Group()
+        self.player_sprites = pygame.sprite.Group()
         self.player = Player((255, 0, 0), 50, 50)
-        self.all_sprites.add(self.player)
+        self.player_sprites.add(self.player)
 
     def update(self):
-        self.all_sprites.update()
+        self.player_sprites.update()
+
+    def draw(self):
+        self.screen.fill((255, 255, 255))
+        self.player_sprites.draw(self.screen)
 
     def run(self):
         running = True
@@ -33,8 +37,7 @@ class GameClient:
             self.update()
 
             # Drawing
-            self.screen.fill((255, 255, 255))
-            self.all_sprites.draw(self.screen)
+            self.draw()
 
             # FPS Limit
             self.clock.tick(constants.FPS)
