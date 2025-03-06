@@ -19,16 +19,26 @@ class Player(pygame.sprite.Sprite):
         self.is_jumping = False
         self.max_jump_height = 20
         self.y_velocity = self.max_jump_height
+        self.x_direction = 0  # -1 for left, 1 for right, 0 for none
 
 
     def update(self):
         keys = pygame.key.get_pressed()
         mouse_pressed = pygame.mouse.get_pressed()
-
-        if keys[pygame.K_a]:
-            self.rect.x -= self.speed
-        if keys[pygame.K_d]:
-            self.rect.x += self.speed
+        
+        # Ground Movement
+        if not self.is_jumping:
+            if keys[pygame.K_a]:
+                self.x_direction = -1
+                self.rect.x -= self.speed
+            elif keys[pygame.K_d]:
+                self.x_direction = 1
+                self.rect.x += self.speed
+            else:
+                self.x_direction = 0  # No key pressed
+        else:
+            # Air Movement (Maintain Momentum)
+            self.rect.x += self.x_direction * self.speed
 
         # Jumping
         if mouse_pressed[0] and not self.is_jumping:
