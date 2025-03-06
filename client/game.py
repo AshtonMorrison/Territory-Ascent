@@ -1,5 +1,6 @@
 import pygame
 from shared import constants
+from .player import Player
 
 class GameClient:
     def __init__(self):
@@ -12,6 +13,14 @@ class GameClient:
         # Clock for FPS
         self.clock = pygame.time.Clock()
 
+        # Player Setup
+        self.all_sprites = pygame.sprite.Group()
+        self.player = Player((255, 0, 0), 50, 50)
+        self.all_sprites.add(self.player)
+
+    def update(self):
+        self.all_sprites.update()
+
     def run(self):
         running = True
         while running:
@@ -20,8 +29,12 @@ class GameClient:
                     running = False
             
             # Everything gets done to the back buffer
+            # Update Game
+            self.update()
+
             # Drawing
             self.screen.fill((255, 255, 255))
+            self.all_sprites.draw(self.screen)
 
             # FPS Limit
             self.clock.tick(constants.FPS)
