@@ -22,10 +22,8 @@ class GameClient:
         self.player = Player(
             (255, 0, 0), constants.TILE_SIZE * 2, constants.TILE_SIZE * 2
         )  # Make player 2x2 tiles
-        self.player.rect.x = constants.TILE_SIZE * 10
-        self.player.rect.y = (
-            constants.TILE_SIZE * 18
-        )
+        self.player.rect.x = constants.TILE_SIZE * 19  # Center position
+        self.player.rect.y = constants.TILE_SIZE * 18
         self.player_sprites.add(self.player)
 
         # Tile Map Setup
@@ -36,7 +34,7 @@ class GameClient:
             "platform": pygame.sprite.Group(),
         }
 
-        # Temp tilemap layout (0: empty, 1: ground, 2: platform)
+        # Tilemap layout (0: empty, 1: ground, 2: platform)
         self.tile_map = [
             [0] * 40,
             [0] * 40,
@@ -49,13 +47,13 @@ class GameClient:
             [0] * 40,
             [0] * 40,
             [0] * 40,
+            [0] * 3 + [2] * 4 + [0] * 26 + [2] * 4 + [0] * 3,
             [0] * 40,
-            [0] * 5 + [2] * 3 + [0] * 16 + [2] * 3 + [0] * 13,
-            [0] * 13 + [2] * 3 + [0] * 24,
+            [0] * 6 + [2] * 4 + [0] * 20 + [2] * 4 + [0] * 6,
             [0] * 40,
-            [0] * 9 + [2] * 2 + [0] * 12 + [2] * 2 + [0] * 15,
+            [0] * 9 + [2] * 4 + [0] * 14 + [2] * 4 + [0] * 9,
             [0] * 40,
-            [0] * 3 + [2] * 3 + [0] * 21 + [2] * 3 + [0] * 10,
+            [0] * 12 + [2] * 4 + [0] * 8 + [2] * 4 + [0] * 12,
             [0] * 40,
             [0] * 40,
             [1] * 40,
