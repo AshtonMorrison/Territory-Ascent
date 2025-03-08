@@ -23,7 +23,7 @@ class Player(pygame.sprite.Sprite):
         self.acceleration = pygame.math.Vector2(0, 0) # To be used for Jumping and Gravity only
 
         # Jumping
-        self.is_jumping = False
+        self.in_air = False
         self.max_fall_speed = 10
         self.dragging = False
         self.drag_start_pos = None
@@ -36,7 +36,7 @@ class Player(pygame.sprite.Sprite):
         mouse_pos = pygame.mouse.get_pos()
 
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
-        if not self.is_jumping and not self.dragging: 
+        if not self.in_air and not self.dragging: 
             if keys[pygame.K_a]:
                 self.velocity.x = -self.speed
             elif keys[pygame.K_d]:
@@ -46,7 +46,7 @@ class Player(pygame.sprite.Sprite):
 
         
         # Mouse Drag Jumping
-        if mouse_pressed[0] and not self.dragging and not self.is_jumping:
+        if mouse_pressed[0] and not self.dragging and not self.in_air:
             self.velocity.x = 0
             self.dragging = True
             self.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
@@ -63,7 +63,7 @@ class Player(pygame.sprite.Sprite):
 
             # Apply the drag vector as acceleration
             self.acceleration = drag_vector / 10 # Divide by a factor to control the power
-            self.is_jumping = True
+            self.in_air = True
 
         # Apply acceleration to velocity
         self.velocity += self.acceleration
@@ -79,19 +79,38 @@ class Player(pygame.sprite.Sprite):
         touched_ground = pygame.sprite.spritecollide(self, tile_groups["ground"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
         touched_platform = pygame.sprite.spritecollide(self, tile_groups["platform"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
 
-        # Ground Collision
+        # Ground Collision, TO BE CHANGED IF HOLES ARE ADDED TO MAP
         if touched_ground:
             self.velocity.y = 0
             self.acceleration.y = 0
             next_position.y = touched_ground[0].rect.top
-            self.is_jumping = False
+            self.in_air = False
 
         # Platform Collision
         if touched_platform:
-            self.velocity.y = 0
-            self.acceleration.y = 0
-            next_position.y = touched_platform[0].rect.top
-            self.is_jumping = False
+            tile = touched_platform[0]
+
+            # Horizontal Collision
+            if self.velocity.x > 0 and next_rect.right > tile.rect.left and self.rect.bottom > tile.rect.top + 1 and self.rect.top < tile.rect.bottom - 1:  # Left Side Collision
+                next_position.x = tile.rect.left - self.rect.width
+                self.velocity.x = 0
+                self.acceleration.x = 0
+            elif self.velocity.x < 0 and next_rect.left < tile.rect.right and self.rect.bottom > tile.rect.top + 1 and self.rect.top < tile.rect.bottom - 1:  # Right Side Collision
+                next_position.x = tile.rect.right
+                self.velocity.x = 0
+                self.acceleration.x = 0
+
+            # Vertical Collision
+            if self.velocity.y > 0 and next_rect.bottom > tile.rect.top and self.rect.bottom < tile.rect.top + 1:  # Top Side Collision
+                next_position.y = tile.rect.top
+                self.velocity.y = 0
+                self.acceleration.y = 0
+                self.in_air = False
+            elif self.velocity.y < 0 and next_rect.top < tile.rect.bottom and self.rect.top > tile.rect.bottom - 1:  # Bottom Side Collision
+                next_position.y = tile.rect.bottom + self.rect.height
+                self.velocity.y = 0
+                self.acceleration.y = 0
+
 
         # Screen Border Collision
         if next_position.x < 0: # Left
