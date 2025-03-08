@@ -3,36 +3,36 @@ import os
 
 
 class Tile(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height, tile_type):
+    def __init__(self, x, y, width, height, image_integer, main_group, sub_group=""):
         super().__init__()
-
-        # Load assets
-        self.assets = {
-            "air": self._load_and_scale_image("assets/air.png", width, height),
-            "ground": self._load_and_scale_image("assets/ground.png", width, height),
-            "platform": self._load_and_scale_image(
-                "assets/platform.png", width, height
-            ),
-        }
 
         # Fallback colors if assets not found
         self.tile_colors = {
-            "air": (255, 255, 255),  # White
             "ground": (139, 69, 19),  # Brown
             "platform": (100, 100, 100),  # Gray
         }
 
-        self.tile_type = tile_type
+        # Load image and add to group
+        if image_integer == 1:
+            self.image = self._load_and_scale_image("assets/ground.png", width, height)
+            if self.image is None:
+                self.image = pygame.Surface([width, height])
+                self.image.fill(self.tile_colors["ground"])
+            sub_group.add(self)
+            
+        if image_integer == 2:
+            self.image = self._load_and_scale_image("assets/platform.png", width, height)
+            if self.image is None:
+                self.image = pygame.Surface([width, height])
+                self.image.fill(self.tile_colors["platform"])
+            sub_group.add(self)
 
-        # Try to use asset, fallback to colored rectangle
-        self.image = self.assets.get(tile_type)
-        if self.image is None:
-            self.image = pygame.Surface([width, height])
-            self.image.fill(self.tile_colors[tile_type])
+        main_group.add(self)
 
+        # Get rects and positions
         self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
+        self.rect.topleft = (x, y)
+
 
     @staticmethod
     def _load_and_scale_image(path, width, height):

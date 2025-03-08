@@ -17,72 +17,73 @@ class GameClient:
         # Clock for FPS
         self.clock = pygame.time.Clock()
 
-        # Player Setup
-        self.player_sprites = pygame.sprite.Group()
-        self.player = Player(
-            (255, 0, 0), constants.TILE_SIZE * 2, constants.TILE_SIZE * 2
-        )  # Make player 2x2 tiles
-        self.player.rect.x = constants.TILE_SIZE * 19  # Center position
-        self.player.rect.y = constants.TILE_SIZE * 18
-        self.player_sprites.add(self.player)
-
         # Tile Map Setup
         self.tile_size = constants.TILE_SIZE
-        self.tiles = {
-            "air": pygame.sprite.Group(),
-            "ground": pygame.sprite.Group(),
-            "platform": pygame.sprite.Group(),
+        self.tile_groups = {
+            "main group": pygame.sprite.Group(), # Used for Drawing
+            "ground": pygame.sprite.Group(), # Used for Collision
+            "platform": pygame.sprite.Group(), # Used for Collision
         }
 
-        # Tilemap layout (0: empty, 1: ground, 2: platform)
+        self.player_groups = {
+            "player": pygame.sprite.Group()
+        }
+
+        # Tilemap layout (0: empty, 1: ground, 2: platform, 3: player)
         self.tile_map = [
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 40,
-            [0] * 3 + [2] * 4 + [0] * 26 + [2] * 4 + [0] * 3,
-            [0] * 40,
-            [0] * 6 + [2] * 4 + [0] * 20 + [2] * 4 + [0] * 6,
-            [0] * 40,
-            [0] * 9 + [2] * 4 + [0] * 14 + [2] * 4 + [0] * 9,
-            [0] * 40,
-            [0] * 12 + [2] * 4 + [0] * 8 + [2] * 4 + [0] * 12,
-            [0] * 40,
-            [0] * 40,
-            [1] * 40,
-            [1] * 40,
-            [1] * 40,
-        ]
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
 
         self.create_tile_map()
 
     def create_tile_map(self):
-        tile_types = {0: "air", 1: "ground", 2: "platform"}
+        for row in range(len(self.tile_map)): 
+            for col in range(len(self.tile_map[row])):
+                x = col * self.tile_size
+                y = row * self.tile_size
 
-        for row_index, row in enumerate(self.tile_map):
-            for col_index, tile_value in enumerate(row):
-                x = col_index * self.tile_size
-                y = row_index * self.tile_size
-                tile = Tile(
-                    x, y, self.tile_size, self.tile_size, tile_types[tile_value]
-                )
-                self.tiles[tile_types[tile_value]].add(tile)
+                # Ground
+                if self.tile_map[row][col] == 1:
+                    Tile(x, y, self.tile_size, self.tile_size, 1, self.tile_groups["main group"], self.tile_groups["ground"])
 
+                # Platform
+                elif self.tile_map[row][col] == 2:
+                    Tile(x, y, self.tile_size, self.tile_size, 2, self.tile_groups["main group"], self.tile_groups["platform"])
+
+                # Player
+                elif self.tile_map[row][col] == 3:
+                    player = Player((255, 0, 0), x, y + 16, self.tile_size, self.tile_size)
+                    self.player_groups["player"].add(player)
+    
     def update(self):
-        self.player_sprites.update()
+        self.player_groups["player"].update(self.tile_groups)
 
     def draw(self):
         self.screen.fill((255, 255, 255))
-        for tile_group in self.tiles.values():
-            tile_group.draw(self.screen)
-        self.player_sprites.draw(self.screen)
+        self.tile_groups["main group"].draw(self.screen)
+        self.player_groups["player"].draw(self.screen)
 
     def run(self):
         running = True
