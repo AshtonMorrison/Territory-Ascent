@@ -1,5 +1,6 @@
 import pygame
 import os
+from shared import constants
 
 
 class Tile(pygame.sprite.Sprite):
@@ -19,12 +20,16 @@ class Tile(pygame.sprite.Sprite):
                 self.image = pygame.Surface([width, height])
                 self.image.fill(self.tile_colors["ground"])
             sub_group.add(self)
-            
+
         if image_integer == 2:
-            self.image = self._load_and_scale_image("assets/platform.png", width, height)
-            if self.image is None:
-                self.image = pygame.Surface([width, height])
-                self.image.fill(self.tile_colors["platform"])
+            # Create platform with default color and dark border
+            self.image = pygame.Surface([width, height])
+            platform_color = constants.DEFAULT_PLATFORM_COLOR  # Use default platform color
+            border_color = (platform_color[0] - 30, platform_color[1] - 30, platform_color[2] - 30)
+
+            self.image.fill(border_color)
+            pygame.draw.rect(self.image, platform_color, [0, height // 2, width, height // 2])
+
             sub_group.add(self)
 
         main_group.add(self)
@@ -32,7 +37,6 @@ class Tile(pygame.sprite.Sprite):
         # Get rects and positions
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
-
 
     @staticmethod
     def _load_and_scale_image(path, width, height):
