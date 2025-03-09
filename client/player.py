@@ -27,6 +27,7 @@ class Player(pygame.sprite.Sprite):
         self.max_fall_speed = 10
         self.dragging = False
         self.drag_start_pos = None
+        self.drag_vector = pygame.math.Vector2(0, 0)
 
     def update(self, tile_groups):
         self.acceleration = pygame.math.Vector2(0, constants.Y_GRAVITY)
@@ -51,19 +52,19 @@ class Player(pygame.sprite.Sprite):
             self.dragging = True
             self.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
 
-        if not mouse_pressed[0] and self.dragging:
-            self.dragging = False
+        if self.dragging:
             drag_end_pos = pygame.math.Vector2(mouse_pos)
-            drag_vector = self.drag_start_pos - drag_end_pos  # Vector from start to end
+            self.drag_vector = self.drag_start_pos - drag_end_pos  # Vector from start to end
             
             # Limit the drag vector length to prevent excessive speeds
             max_drag_length = 200  # Adjust as needed
-            if drag_vector.length() > max_drag_length:
-                drag_vector = drag_vector.normalize() * max_drag_length
-
-            # Apply the drag vector as acceleration
-            self.acceleration = drag_vector / 10 # Divide by a factor to control the power
-            self.in_air = True
+            if self.drag_vector.length() > max_drag_length:
+                self.drag_vector = self.drag_vector.normalize() * max_drag_length
+            if not mouse_pressed[0]:  
+                self.dragging = False
+                # Apply the drag vector as acceleration
+                self.acceleration = self.drag_vector / 10 # Divide by a factor to control the power
+                self.in_air = True
 
         # Apply acceleration to velocity
         self.velocity += self.acceleration

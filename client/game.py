@@ -84,6 +84,11 @@ class GameClient:
         self.screen.fill((255, 255, 255))
         self.tile_groups["main group"].draw(self.screen)
         self.player_groups["player"].draw(self.screen)
+        # Draw drag vector if dragging
+        for player in self.player_groups["player"]:
+            if player.dragging:
+                end_pos = player.position + player.drag_vector
+                pygame.draw.line(self.screen, (0, 0, 255), player.position, end_pos, 2)
 
     def run(self):
         running = True
