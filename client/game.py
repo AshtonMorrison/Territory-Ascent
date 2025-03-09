@@ -2,6 +2,7 @@ import pygame
 from shared import constants
 from .player import Player
 from .tile import Tile
+import math
 
 
 class GameClient:
@@ -87,8 +88,26 @@ class GameClient:
         # Draw drag vector if dragging
         for player in self.player_groups["player"]:
             if player.dragging:
-                end_pos = player.position + player.drag_vector
-                pygame.draw.line(self.screen, (0, 0, 255), player.position, end_pos, 2)
+                start_pos = player.rect.center
+                end_pos = start_pos + player.drag_vector
+                pygame.draw.line(self.screen, (0, 0, 255), start_pos, end_pos, 3)
+                
+                # Draw arrowhead
+                angle = math.atan2(start_pos[1] - end_pos[1], start_pos[0] - end_pos[0])
+                arrow_length = 12
+                arrow_angle = math.pi / 4
+
+                left_arrow = (
+                    end_pos[0] + arrow_length * math.cos(angle + arrow_angle),
+                    end_pos[1] + arrow_length * math.sin(angle + arrow_angle),
+                )
+                right_arrow = (
+                    end_pos[0] + arrow_length * math.cos(angle - arrow_angle),
+                    end_pos[1] + arrow_length * math.sin(angle - arrow_angle),
+                )
+
+                pygame.draw.line(self.screen, (0, 0, 255), end_pos, left_arrow, 3)
+                pygame.draw.line(self.screen, (0, 0, 255), end_pos, right_arrow, 3)
 
     def run(self):
         running = True
