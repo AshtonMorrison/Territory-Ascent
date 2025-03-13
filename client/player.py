@@ -38,9 +38,9 @@ class Player(pygame.sprite.Sprite):
 
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
         if not self.in_air and not self.dragging: 
-            if keys[pygame.K_a]:
+            if keys[pygame.K_a] and not keys[pygame.K_d]:
                 self.velocity.x = -self.speed
-            elif keys[pygame.K_d]:
+            elif keys[pygame.K_d] and not keys[pygame.K_a]:
                 self.velocity.x = self.speed
             else:
                 self.velocity.x = 0
