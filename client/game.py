@@ -1,7 +1,7 @@
 import pygame
 from shared import constants
-from .player import Player
-from .tile import Tile
+import player
+import tile
 import math
 
 
