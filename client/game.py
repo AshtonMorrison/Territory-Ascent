@@ -258,10 +258,11 @@ class GameClient:
         conn, e = self.connect()
 
         if conn is None:
-            print("Failed to connect to server with " + e)
-            pygame.quit()
-
+            print(f"Failed to connect to server with {e}")
+            return
+        
         self.running = True
+
         # Start update thread
         update_thread = threading.Thread(target=self.update, args=(conn,))
         update_thread.daemon = True

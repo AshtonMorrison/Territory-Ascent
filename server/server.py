@@ -180,7 +180,7 @@ class GameServer:
         self.server.bind((self.host, self.port))
         self.server.listen()
         print(f"Server listening on {self.host}:{self.port}")
-        print(f"IP address of server is: {socket.gethostbyname(socket.gethostname())}")
+        print(f"IP address of server is: 192.168.0.203 not, {socket.gethostbyname(socket.gethostname())}")
 
         # Start game loop thread
         game_thread = threading.Thread(target=self.game_loop)
