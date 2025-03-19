@@ -27,13 +27,23 @@ class GameServer:
         self.clock = pygame.time.Clock()
 
         # Player Colors
-        self.unused_colors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"] # 8 Players, should be fine
+        self.unused_colors = [
+            "red",
+            "blue",
+            "green",
+            "yellow",
+            "purple",
+            "orange",
+            "pink",
+            "cyan",
+        ]  # 8 Players, should be fine
         self.used_colors = []
 
-        
         # Tilemap
         self.tile_size = constants.TILE_SIZE
-        self.tile_dict = {}  # used to access tiles by (x, y) coordinates. MIGHT NOT NEED DEPENDING ON LATER IMPLEMENTATION
+        self.tile_dict = (
+            {}
+        )  # used to access tiles by (x, y) coordinates. MIGHT NOT NEED DEPENDING ON LATER IMPLEMENTATION
         self.tile_data = []  # used for initial sending of tile map to clients
 
         # Tilemap layout (0: empty, 1: ground, 2: platform)
@@ -84,13 +94,17 @@ class GameServer:
         self.sprite_groups["players"].add(player)
 
         # Send initial information (tile map, player location, tile state, etc)
-        conn.sendall(json.dumps(
-            {"type": "INITIAL", 
-             "TileMap": self.tile_data,
-             "Players": self.get_player_state(),
-             "YourPlayer": color,
-             "MapState": self.get_map_state(),
-             }).encode())
+        conn.sendall(
+            json.dumps(
+                {
+                    "type": "INITIAL",
+                    "TileMap": self.tile_data,
+                    "Players": self.get_player_state(),
+                    "YourPlayer": color,
+                    "MapState": self.get_map_state(),
+                }
+            ).encode()
+        )
 
         try:
             while self.running:
@@ -117,6 +131,23 @@ class GameServer:
                     # They are done in the game loop, you must somehow send the input to the game loop
                     # and then update the player there, maybe saving the input as a tag or in a queue in the player object
                     # Currently I have tag implemented, but if that doesnt work for you try the queue method
+
+                    # Handle movement input
+                    elif player_data["type"] == "MOVE":
+                        # player = self.clients[addr]
+                        if player_data["direction"] in ["left", "right"]:
+                            player.direction = player_data["direction"]
+                        else:
+                            print(f"Invalid direction: {player_data['direction']}")
+                    
+                    # Handle jump input 
+                    elif player_data["type"] == "JUMP":
+                        # player = self.clients[addr]
+                        player.jump = True
+                        player.drag_vector = pygame.math.Vector2(
+                            player_data["drag_x"],
+                            player_data["drag_y"]
+                        )
 
                 except socket.timeout:
                     continue
@@ -223,8 +254,8 @@ class GameServer:
                     player.update(self.sprite_groups)
 
             # Update tiles
-            #for tile in self.sprite_groups["platform"]:
-                #tile.update(self.sprite_groups)
+            # for tile in self.sprite_groups["platform"]:
+            # tile.update(self.sprite_groups)
 
             # Broadcast state
             self.broadcast()
