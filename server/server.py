@@ -2,10 +2,10 @@ import socket
 import json
 import threading
 import pygame
-import shared.constants as constants
+from shared import constants
 from .tile import Tile
 from .player import Player
-from tilemaps import sample_tile_map
+from .tilemaps import sample_tile_map
 
 
 class GameServer:
@@ -13,6 +13,8 @@ class GameServer:
         self.host = host
         self.port = constants.PORT
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.running = True
+        self.server.settimeout(1.0)
         self.clients = {}  # Maps client address to player objects
         self.tile_groups = {
             "ground": pygame.sprite.Group(),  # Used for Collision
@@ -51,7 +53,7 @@ class GameServer:
 
                 # Platform
                 elif self.tile_map[row][col] == 2:
-                    self.tile_dict[{x, y}] = Tile(
+                    self.tile_dict[(x, y)] = Tile(
                         x,
                         y,
                         self.tile_size,
@@ -71,19 +73,21 @@ class GameServer:
         conn.sendall(json.dumps({"type": "MAP", "TileMap": self.tile_data}).encode())
 
         try:
-            while True:
-                data = conn.recv(1024).decode()
-                if not data:
-                    break
+            while self.running:
+                try:
+                    data = conn.recv(1024).decode()
+                    if not data:
+                        break
 
-                # Parse client input
-                message = json.loads(data)
-                if message["type"] == "INPUT":
-                    # Update player based on input
-                    self.clients[addr].handle_input(message["input"])
-                    # Broadcast new state to all clients
-                    self.broadcast()
-
+                    # Parse client input
+                    message = json.loads(data)
+                    if message["type"] == "INPUT":
+                        # Update player based on input
+                        self.clients[addr].handle_input(message["input"])
+                        # Broadcast new state to all clients
+                        self.broadcast()
+                except socket.timeout:
+                    continue
         except Exception as e:
             print(f"Error with client {addr}: {e}")
         finally:
@@ -129,14 +133,34 @@ class GameServer:
         threading.Thread(target=self.game_loop).start()
 
         # Accept connections
-        while True:
-            conn, addr = self.server.accept()
-            threading.Thread(target=self.handle_client, args=(conn, addr)).start()
+        try:
+            while self.running:
+                try:
+                    conn, addr = self.server.accept()
+                    client_thread = threading.Thread(
+                        target=self.handle_client, args=(conn, addr)
+                    )
+                    client_thread.daemon = True
+                    client_thread.start()
+                except socket.timeout:
+                    continue
+        except KeyboardInterrupt:
+            print("\nShutting down server...")
+            self.running = False  # Signal threads to stop
+        finally:
+            # Clean up
+            for addr, player in list(self.clients.items()):
+                try:
+                    player.conn.close()
+                except:
+                    pass
+            self.server.close()
+            print("Server shut down complete")
 
     def game_loop(self):
         """Main game loop running at 60 FPS"""
         clock = pygame.time.Clock()
-        while True:
+        while self.running:
             # Update all players
             with self.lock:
                 for player in self.clients.values():
@@ -150,5 +174,8 @@ class GameServer:
 
 
 if __name__ == "__main__":
-    server = GameServer()
-    server.start()
+    try:
+        server = GameServer()
+        server.start()
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
