@@ -16,16 +16,24 @@ class GameServer:
         self.running = True
         self.server.settimeout(1.0)
         self.clients = {}  # Maps client address to player objects
-        self.tile_groups = {
+
+        self.sprite_groups = {
             "ground": pygame.sprite.Group(),  # Used for Collision
             "platform": pygame.sprite.Group(),  # Used for Collision
+            "players": pygame.sprite.Group(),  # Used for Collision
         }
-        self.lock = threading.Lock()
 
+        self.lock = threading.Lock()
+        self.clock = pygame.time.Clock()
+
+        # Player Colors
+        self.unused_colors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"] # 8 Players, should be fine
+        self.used_colors = []
+
+        
+        # Tilemap
         self.tile_size = constants.TILE_SIZE
-        self.tile_dict = (
-            {}
-        )  # used to access tiles by (x, y) coordinates. MIGHT NOT NEED DEPENDING ON LATER IMPLEMENTATION
+        self.tile_dict = {}  # used to access tiles by (x, y) coordinates. MIGHT NOT NEED DEPENDING ON LATER IMPLEMENTATION
         self.tile_data = []  # used for initial sending of tile map to clients
 
         # Tilemap layout (0: empty, 1: ground, 2: platform)
@@ -47,7 +55,7 @@ class GameServer:
                         self.tile_size,
                         self.tile_size,
                         1,
-                        self.tile_groups["ground"],
+                        self.sprite_groups["ground"],
                     )
                     self.tile_data.append({"x": x, "y": y, "type": 1})
 
@@ -59,18 +67,30 @@ class GameServer:
                         self.tile_size,
                         self.tile_size,
                         2,
-                        self.tile_groups["platform"],
+                        self.sprite_groups["platform"],
                     )
                     self.tile_data.append({"x": x, "y": y, "type": 2})
 
     def handle_client(self, conn, addr):
         print(f"New connection: {addr}")
-        player = Player((255, 0, 0), 100, 100, self.tile_size, self.tile_size)
+        color = self.get_color()
+        if color == "Error: No more colors available":
+            conn.sendall("Error: No more colors available".encode())
+            conn.close()
+            return
+        player = Player(color, 100, 100, self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
         self.clients[addr] = player
+        self.sprite_groups["players"].add(player)
 
-        # Send initial tile map
-        conn.sendall(json.dumps({"type": "MAP", "TileMap": self.tile_data}).encode())
+        # Send initial information (tile map, player location, tile state, etc)
+        conn.sendall(json.dumps(
+            {"type": "INITIAL", 
+             "TileMap": self.tile_data,
+             "Players": self.get_player_state(),
+             "YourPlayer": color,
+             "MapState": self.get_map_state(),
+             }).encode())
 
         try:
             while self.running:
@@ -79,19 +99,18 @@ class GameServer:
                     if not data:
                         break
 
-                    # Parse client input
-                    message = json.loads(data)
-                    if message["type"] == "INPUT":
-                        # Update player based on input
-                        self.clients[addr].handle_input(message["input"])
-                        # Broadcast new state to all clients
-                        self.broadcast()
+                    # Parse client input, PLAYER UPDATE AND TILE UPDATE DO NOT GET DONE HERE
+                    # They are done in the game loop, you must somehow send the input to the game loop
+                    # and then update the player there, maybe saving the input as a tag or in a queue in the player object
+
                 except socket.timeout:
                     continue
         except Exception as e:
             print(f"Error with client {addr}: {e}")
         finally:
             conn.close()
+            self.unused_colors.append(player.color)
+            self.used_colors.remove(player.color)
             with self.lock:
                 del self.clients[addr]
             print(f"Client {addr} disconnected.")
@@ -104,8 +123,15 @@ class GameServer:
 
     def get_map_state(self):
         # TO BE ADDED FOR WHEN TILES ACTUALLY CHANGE
-        # So, [{"x": t.x, "y": t.y, "color": t.color} for t in self.tiles] or something similar
+        # So, [{"x": t.x, "y": t.y, "color": t.color} for t in self.updated_tiles] or something similar
         pass
+
+    def get_color(self):
+        if len(self.unused_colors) == 0:
+            return "Error: No more colors available"
+        color = self.unused_colors.pop(0)
+        self.used_colors.append(color)
+        return color
 
     def broadcast(self):
         """Broadcasts game state to all connected clients"""
@@ -139,6 +165,7 @@ class GameServer:
         self.server.bind((self.host, self.port))
         self.server.listen()
         print(f"Server listening on {self.host}:{self.port}")
+        print(f"IP address of server is: {socket.gethostbyname(socket.gethostname())}")
 
         # Start game loop thread
         game_thread = threading.Thread(target=self.game_loop)
@@ -172,18 +199,22 @@ class GameServer:
 
     def game_loop(self):
         """Main game loop running at 60 FPS"""
-        clock = pygame.time.Clock()
         while self.running:
-            # Update all players
-            with self.lock:
-                for player in self.clients.values():
-                    player.update(self.tile_groups)
+
+            # # Update all players
+            # with self.lock:
+            #     for player in self.clients.values():
+            #         player.update(self.sprite_groups)
+
+            # Update tiles
+            #for tile in self.sprite_groups["platform"]:
+                #tile.update(self.sprite_groups)
 
             # Broadcast state
             self.broadcast()
 
             # Maintain 60 FPS
-            clock.tick(60)
+            self.clock.tick(60)
 
 
 if __name__ == "__main__":

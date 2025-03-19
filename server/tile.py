@@ -38,7 +38,8 @@ class Tile(pygame.sprite.Sprite):
             sub_group.add(self)
 
         # Get rects and positions
-        self.X = x
-        self.Y = y
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
+
+    def update(self):
+        pass

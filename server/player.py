@@ -15,20 +15,19 @@ class Player(pygame.sprite.Sprite):
         # Position and Rect
         self.rect = self.image.get_rect()
         self.rect.bottomleft = (x, y)
+        self.position = pygame.math.Vector2(x, y)
 
         # Movement
         self.speed = 5
-        self.position = pygame.math.Vector2(x, y)
         self.velocity = pygame.math.Vector2(0, 0)
         self.acceleration = pygame.math.Vector2(0, 0) # To be used for Jumping and Gravity only
 
-
         # Jumping
-        self.in_air = False
         self.max_fall_speed = 10
-        self.dragging = False
-        self.drag_start_pos = None
-        self.drag_vector = pygame.math.Vector2(0, 0)
+
+        # Server side stuff
+        self.conn = None
+
 
     def update(self, tile_groups):
         self.acceleration = pygame.math.Vector2(0, constants.Y_GRAVITY)
