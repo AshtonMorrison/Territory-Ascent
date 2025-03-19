@@ -137,9 +137,7 @@ class GameServer:
             while self.running:
                 try:
                     conn, addr = self.server.accept()
-                    client_thread = threading.Thread(
-                        target=self.handle_client, args=(conn, addr)
-                    )
+                    client_thread = threading.Thread(target=self.handle_client, args=(conn, addr))
                     client_thread.daemon = True
                     client_thread.start()
                 except socket.timeout:
@@ -174,8 +172,5 @@ class GameServer:
 
 
 if __name__ == "__main__":
-    try:
         server = GameServer()
         server.start()
-    except KeyboardInterrupt:
-        print("\nShutting down server...")

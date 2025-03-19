@@ -1,5 +1,5 @@
 # Network settings
-PORT = 5555
+PORT = 5556
 HOST = "localhost" # Will change later when server side gets made
 
 # Game settings
