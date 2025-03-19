@@ -124,28 +124,43 @@ class GameServer:
                     print(f"Failed to send to {addr}")
                     del self.clients[addr]
 
+    def stop(self):
+        """Cleanly stop the server"""
+        self.running = False
+        # Create a temporary socket to unblock accept()
+        try:
+            tmp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            tmp_socket.connect((self.host, self.port))
+            tmp_socket.close()
+        except:
+            pass
+
     def start(self):
         self.server.bind((self.host, self.port))
         self.server.listen()
         print(f"Server listening on {self.host}:{self.port}")
 
         # Start game loop thread
-        threading.Thread(target=self.game_loop).start()
+        game_thread = threading.Thread(target=self.game_loop)
+        game_thread.daemon = True
+        game_thread.start()
 
         # Accept connections
         try:
             while self.running:
                 try:
                     conn, addr = self.server.accept()
-                    client_thread = threading.Thread(target=self.handle_client, args=(conn, addr))
+                    client_thread = threading.Thread(
+                        target=self.handle_client, args=(conn, addr)
+                    )
                     client_thread.daemon = True
                     client_thread.start()
                 except socket.timeout:
                     continue
         except KeyboardInterrupt:
             print("\nShutting down server...")
-            self.running = False  # Signal threads to stop
         finally:
+            self.stop()
             # Clean up
             for addr, player in list(self.clients.items()):
                 try:
@@ -172,5 +187,8 @@ class GameServer:
 
 
 if __name__ == "__main__":
-        server = GameServer()
+    server = GameServer()
+    try:
         server.start()
+    except KeyboardInterrupt:
+        server.stop()
