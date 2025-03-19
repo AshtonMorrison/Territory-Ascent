@@ -17,14 +17,15 @@ class Player(pygame.sprite.Sprite):
         self.rect.bottomleft = (x, y)
 
         # Jumping
-        self.in_air = False
         self.dragging = False
         self.drag_start_pos = None
         self.drag_vector = pygame.math.Vector2(0, 0)
         
 
-    def update(self):
-        pass
+    def update(self, x, y):
+        
+        # Update rect position
+        self.rect.bottomleft = (x ,y)
 
     @staticmethod
     def _load_and_scale_image(path, width, height):

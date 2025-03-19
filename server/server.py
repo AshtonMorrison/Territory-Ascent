@@ -75,7 +75,7 @@ class GameServer:
         print(f"New connection: {addr}")
         color = self.get_color()
         if color == "Error: No more colors available":
-            conn.sendall("Error: No more colors available".encode())
+            conn.sendall(json.dumps("Error: No more colors available").encode())
             conn.close()
             return
         player = Player(color, 100, 100, self.tile_size, self.tile_size)
@@ -95,13 +95,28 @@ class GameServer:
         try:
             while self.running:
                 try:
-                    data = conn.recv(1024).decode()
-                    if not data:
+                    data = ""
+                    while True:
+                        chunk = conn.recv(2048).decode()
+                        if not chunk:
+                            break
+                        data += chunk
+                        try:
+                            player_data = json.loads(data)
+                            break  # Successfully parsed JSON, exit loop
+                        except json.JSONDecodeError:
+                            # Incomplete JSON, continue receiving
+                            continue
+
+                    # Handle client input
+                    if player_data["type"] == "DISCONNECT":
+                        conn.sendall("DISCONNECTED".encode())
                         break
 
                     # Parse client input, PLAYER UPDATE AND TILE UPDATE DO NOT GET DONE HERE
                     # They are done in the game loop, you must somehow send the input to the game loop
                     # and then update the player there, maybe saving the input as a tag or in a queue in the player object
+                    # Currently I have tag implemented, but if that doesnt work for you try the queue method
 
                 except socket.timeout:
                     continue
@@ -191,6 +206,7 @@ class GameServer:
             # Clean up
             for addr, player in list(self.clients.items()):
                 try:
+                    player.conn.sendall(json.dumps({"type": "SHUTTING DOWN"}).encode())
                     player.conn.close()
                 except:
                     pass
@@ -201,10 +217,10 @@ class GameServer:
         """Main game loop running at 60 FPS"""
         while self.running:
 
-            # # Update all players
-            # with self.lock:
-            #     for player in self.clients.values():
-            #         player.update(self.sprite_groups)
+            # Update all players
+            with self.lock:
+                for player in self.clients.values():
+                    player.update(self.sprite_groups)
 
             # Update tiles
             #for tile in self.sprite_groups["platform"]:

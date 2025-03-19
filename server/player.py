@@ -23,48 +23,36 @@ class Player(pygame.sprite.Sprite):
         self.acceleration = pygame.math.Vector2(0, 0) # To be used for Jumping and Gravity only
 
         # Jumping
+        self.in_air = False
         self.max_fall_speed = 10
 
         # Server side stuff
         self.conn = None
+        # POTENTIALLY ADD TAGS FOR MOVEMENT TO GO FROM CLIENT HANDLE TO GAME LOOP UPDATE
+        self.direction = None
+        self.jump = False
+        self.drag_vector = pygame.math.Vector2(0, 0)
 
 
     def update(self, tile_groups):
         self.acceleration = pygame.math.Vector2(0, constants.Y_GRAVITY)
 
-        keys = pygame.key.get_pressed()
-        mouse_pressed = pygame.mouse.get_pressed()
-        mouse_pos = pygame.mouse.get_pos()
-
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
-        if not self.in_air and not self.dragging: 
-            if keys[pygame.K_a] and not keys[pygame.K_d]:
+        if not self.in_air: 
+            if self.direction == "left":
                 self.velocity.x = -self.speed
-            elif keys[pygame.K_d] and not keys[pygame.K_a]:
+            elif self.direction == "right":
                 self.velocity.x = self.speed
             else:
                 self.velocity.x = 0
 
-        
-        # Mouse Drag Jumping
-        if mouse_pressed[0] and not self.dragging and not self.in_air:
-            self.velocity.x = 0
-            self.dragging = True
-            self.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
+        # Jumping
+        if self.jump and not self.in_air:
+            self.acceleration = self.drag_vector / 10 # Divide by a factor to control the power
+            self.in_air = True
 
-        if self.dragging:
-            drag_end_pos = pygame.math.Vector2(mouse_pos)
-            self.drag_vector = self.drag_start_pos - drag_end_pos  # Vector from start to end
-            
-            # Limit the drag vector length to prevent excessive speeds
-            max_drag_length = 200  # Adjust as needed
-            if self.drag_vector.length() > max_drag_length:
-                self.drag_vector = self.drag_vector.normalize() * max_drag_length
-            if not mouse_pressed[0]:  
-                self.dragging = False
-                # Apply the drag vector as acceleration
-                self.acceleration = self.drag_vector / 10 # Divide by a factor to control the power
-                self.in_air = True
+        self.direction = None
+        self.jump = None
 
         # Apply acceleration to velocity
         self.velocity += self.acceleration
