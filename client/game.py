@@ -1,8 +1,11 @@
 import pygame
 from shared import constants
-import player
-import tile
+from .tile import Tile
+from .player import Player
 import math
+import socket
+import threading
+import json
 
 
 class GameClient:
@@ -18,98 +21,175 @@ class GameClient:
         # Clock for FPS
         self.clock = pygame.time.Clock()
 
-        # Tile Map Setup
+        # Tile Dictionary
+        self.tile_dict = {}
         self.tile_size = constants.TILE_SIZE
-        self.tile_groups = {
-            "main group": pygame.sprite.Group(), # Used for Drawing
-            "ground": pygame.sprite.Group(), # Used for Collision
-            "platform": pygame.sprite.Group(), # Used for Collision
-        }
 
-        self.player_groups = {
-            "player": pygame.sprite.Group()
-        }
+        # Player Dictionary, SELF.ME IS THE COLOR OF THE CLIENTS PLAYER
+        self.me = None
+        self.player_dict = {}
 
-        # Tilemap layout (0: empty, 1: ground, 2: platform, 3: player)
-        self.tile_map = [
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
+    def connect(self): # Used to connect to server and parse initial data from server
+        try:
+            ip = input("Enter the server IP: ")
 
-        self.create_tile_map()
+            # Create a socket
+            conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def create_tile_map(self):
-        for row in range(len(self.tile_map)): 
-            for col in range(len(self.tile_map[row])):
-                x = col * self.tile_size
-                y = row * self.tile_size
+            # Connect to the server
+            server_address = (ip, constants.PORT)  # Replace with your server's IP and port
+            conn.connect(server_address)
+            print(f"Connected to {server_address}")
 
-                # Ground
-                if self.tile_map[row][col] == 1:
-                    Tile(x, y, self.tile_size, self.tile_size, 1, self.tile_groups["main group"], self.tile_groups["ground"])
+            # Receive initial data
+            data = ""
+            while True:
+                chunk = conn.recv(1024).decode()
+                if not chunk:
+                    break
+                data += chunk
+                try:
+                    initial_data = json.loads(data)
+                    break  # Successfully parsed JSON, exit loop
+                except json.JSONDecodeError:
+                    # Incomplete JSON, continue receiving
+                    continue
 
-                # Platform
-                elif self.tile_map[row][col] == 2:
-                    Tile(x, y, self.tile_size, self.tile_size, 2, self.tile_groups["main group"], self.tile_groups["platform"])
+            # Check for error message
+            if data == "Error: No more colors available":
+                e = "Error: Server full, No more player slots available"
+                conn.close()
+                return None, e
 
-                # Player
-                elif self.tile_map[row][col] == 3:
-                    player = Player((255, 0, 0), x, y + 16, self.tile_size, self.tile_size)
-                    self.player_groups["player"].add(player)
+            initial_data = json.loads(data)
+
+            # Parse initial data
+            if initial_data["type"] == "INITIAL":
+                self.me = initial_data["YourPlayer"]
+                print(f"You are {self.me} player")
+
+                # Create tile map
+                tile_data = initial_data["TileMap"]
+                self.create_tile_map(tile_data)
+
+                # Create players
+                player_data = initial_data["Players"]
+                for player_info in player_data:
+                    self.create_player(player_info["color"], player_info["x"], player_info["y"])
+
+                # TO DO WHEN TILES UPDATE AND A PLAYER JOINS LATE INTO THE GAME
+                # map_data = initial_data["MapState"]
+                # call tile.update() for each tile in map_data to change its color
+                
+            else:
+                e = "Error: Invalid initial data received from server"
+                conn.close()
+                return None, e
+
+            return conn, None # Return the connection object and no error
+
+        except socket.error as e:
+            return None, e
+
+    def disconnect(self): # Used to disconnect from server
+        pass
+
+    def create_tile_map(self, tile_data): # Used to create the tile map from info from server
+        for tile_info in tile_data:
+            x = tile_info["x"]
+            y = tile_info["y"]
+            tile_type = tile_info["type"]
+            self.tile_dict[(x, y)] = Tile(x, y, self.tile_size, self.tile_size, tile_type)
+
+    def create_player(self, color, x, y): # Used to create a player from info from server
+        self.player_dict[color] = Player(color, x, y, self.tile_size, self.tile_size)
+
+    def handle_inputs(self, conn): # Used to handle inputs from user, must convert these inputs to messages to send to server
     
-    def update(self):
-        self.player_groups["player"].update(self.tile_groups)
+        keys = pygame.key.get_pressed()
+        mouse_pressed = pygame.mouse.get_pressed()
+        mouse_pos = pygame.mouse.get_pos()
+
+        # ISSUE: CLIENT WON'T HAVE IN_AIR TAG, SERVER WILL BE REQUIRED TO HANDLE IGNORING PACKETS IF PLAYER IS IN AIR, UNLESS ANOTHER WAY CAN BE FOUND
+        # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
+        if not self.player_dict[self.me].dragging: 
+            if keys[pygame.K_a] and not keys[pygame.K_d]: 
+                # Send message to server to move left
+                pass
+            elif keys[pygame.K_d] and not keys[pygame.K_a]:
+                # Send message to server to move right
+                pass
+        
+        # Mouse Drag Jumping
+        if mouse_pressed[0] and not self.player_dict[self.me].dragging:
+            self.player_dict[self.me].dragging = True
+            self.player_dict[self.me].drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
+
+        if self.player_dict[self.me].dragging:
+            drag_end_pos = pygame.math.Vector2(mouse_pos)
+            self.player_dict[self.me].drag_vector = self.player_dict[self.me].drag_start_pos - drag_end_pos  # Vector from start to end
+            
+            # Limit the drag vector length to prevent excessive speeds
+            max_drag_length = 200  # Adjust as needed
+            if self.player_dict[self.me].drag_vector.length() > max_drag_length:
+                self.player_dict[self.me].drag_vector = self.player_dict[self.me].drag_vector.normalize() * max_drag_length
+            if not mouse_pressed[0]:  
+                self.player_dict[self.me].dragging = False
+                # Send message to server to jump with drag vector
+                pass
+        pass
+    
+    def update(self): # Used to update the game state from the servers broadcast (Player locations, tile colors), RUNS ON SEPERATE THREAD
+        pass
 
     def draw(self):
+        # Make background white
         self.screen.fill((255, 255, 255))
-        self.tile_groups["main group"].draw(self.screen)
-        self.player_groups["player"].draw(self.screen)
+
+        # Draw tiles
+        for t in self.tile_dict.values():
+            self.screen.blit(t.image, t.rect)
+
+        # Draw players
+        for p in self.player_dict.values():
+            self.screen.blit(p.image, p.rect)
+
         # Draw drag vector if dragging
-        for player in self.player_groups["player"]:
-            if player.dragging:
-                start_pos = player.rect.center
-                end_pos = start_pos + player.drag_vector
-                pygame.draw.line(self.screen, (0, 0, 255), start_pos, end_pos, 3)
-                
-                # Draw arrowhead
-                angle = math.atan2(start_pos[1] - end_pos[1], start_pos[0] - end_pos[0])
-                arrow_length = 12
-                arrow_angle = math.pi / 4
+        if self.player_dict[self.me].dragging:
+            start_pos = self.player_dict[self.me].rect.center
+            end_pos = start_pos + self.player_dict[self.me].drag_vector
+            pygame.draw.line(self.screen, (0, 0, 255), start_pos, end_pos, 3)
+            
+            # Draw arrowhead
+            angle = math.atan2(start_pos[1] - end_pos[1], start_pos[0] - end_pos[0])
+            arrow_length = 12
+            arrow_angle = math.pi / 4
 
-                left_arrow = (
-                    end_pos[0] + arrow_length * math.cos(angle + arrow_angle),
-                    end_pos[1] + arrow_length * math.sin(angle + arrow_angle),
-                )
-                right_arrow = (
-                    end_pos[0] + arrow_length * math.cos(angle - arrow_angle),
-                    end_pos[1] + arrow_length * math.sin(angle - arrow_angle),
-                )
+            left_arrow = (
+                end_pos[0] + arrow_length * math.cos(angle + arrow_angle),
+                end_pos[1] + arrow_length * math.sin(angle + arrow_angle),
+            )
+            right_arrow = (
+                end_pos[0] + arrow_length * math.cos(angle - arrow_angle),
+                end_pos[1] + arrow_length * math.sin(angle - arrow_angle),
+            )
 
-                pygame.draw.line(self.screen, (0, 0, 255), end_pos, left_arrow, 3)
-                pygame.draw.line(self.screen, (0, 0, 255), end_pos, right_arrow, 3)
+            pygame.draw.line(self.screen, (0, 0, 255), end_pos, left_arrow, 3)
+            pygame.draw.line(self.screen, (0, 0, 255), end_pos, right_arrow, 3)
 
-    def run(self):
+    def run(self): # RUNS ON MAIN THREAD
+        conn, e = self.connect()
+
+        if conn is None:
+            print("Failed to connect to server with " + e)
+            pygame.quit()
+    
+        # Start update thread
+        update_thread = threading.Thread(target=self.update)
+        update_thread.daemon = True
+        update_thread.start()
+
+        # Main loop
         running = True
         while running:
             for event in pygame.event.get():
@@ -117,8 +197,8 @@ class GameClient:
                     running = False
 
             # Everything gets done to the back buffer
-            # Update Game
-            self.update()
+            # Input handling
+            self.handle_inputs(conn)
 
             # Drawing
             self.draw()
@@ -129,6 +209,7 @@ class GameClient:
             # Flip the back buffer to the front
             pygame.display.flip()
 
+        self.disconnect()
         pygame.quit()
 
 
