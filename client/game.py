@@ -145,7 +145,7 @@ class GameClient:
         mouse_pos = pygame.mouse.get_pos()
 
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
-        if not me.dragging:
+        if not me.dragging and not me.in_air:
             if keys[pygame.K_a] and not keys[pygame.K_d]:
                 message = {"type": "MOVE", "direction": "left"}
                 conn.sendall(json.dumps(message).encode())
