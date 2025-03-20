@@ -118,7 +118,7 @@ class GameServer:
                         break
                     player_data = json.loads(data)
                     
-                    # Handle client input
+                    # Handle disconnect input
                     if player_data["type"] == "DISCONNECT":
                         message = "DISCONNECTED".encode()
                         length_message = len(message).to_bytes(4, byteorder="big")
@@ -152,6 +152,7 @@ class GameServer:
             self.used_colors.remove(player.color)
             with self.lock:
                 if addr in self.clients:
+                    self.sprite_groups["players"].remove(self.clients[addr])
                     del self.clients[addr]
             print(f"Client {addr} disconnected.")
 
@@ -217,7 +218,7 @@ class GameServer:
         self.server.bind((self.host, self.port))
         self.server.listen()
         print(f"Server listening on {self.host}:{self.port}")
-        print(f"IP address of server is: 192.168.0.203 not, {socket.gethostbyname(socket.gethostname())}")
+        print(f"IP address of server is: {socket.gethostbyname(socket.gethostname())}")
 
         # Start game loop thread
         game_thread = threading.Thread(target=self.game_loop)
