@@ -38,16 +38,15 @@ class Player(pygame.sprite.Sprite):
         self.acceleration = pygame.math.Vector2(0, constants.Y_GRAVITY)
 
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
-        if not self.in_air: 
-            if self.direction == "left":
-                self.velocity.x = -self.speed
-            elif self.direction == "right":
-                self.velocity.x = self.speed
-            else:
-                self.velocity.x = 0
+        if self.direction == "left":
+            self.velocity.x = -self.speed
+        elif self.direction == "right":
+            self.velocity.x = self.speed
+        elif not self.in_air:
+            self.velocity.x = 0
 
         # Jumping
-        if self.jump and not self.in_air:
+        if self.jump:
             self.acceleration = self.drag_vector / 10 # Divide by a factor to control the power
             self.in_air = True
 

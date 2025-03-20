@@ -27,13 +27,23 @@ class GameServer:
         self.clock = pygame.time.Clock()
 
         # Player Colors
-        self.unused_colors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"] # 8 Players, should be fine
+        self.unused_colors = [
+            "red",
+            "blue",
+            "green",
+            "yellow",
+            "purple",
+            "orange",
+            "pink",
+            "cyan",
+        ]  # 8 Players, should be fine
         self.used_colors = []
 
-        
         # Tilemap
         self.tile_size = constants.TILE_SIZE
-        self.tile_dict = {}  # used to access tiles by (x, y) coordinates. MIGHT NOT NEED DEPENDING ON LATER IMPLEMENTATION
+        self.tile_dict = (
+            {}
+        )  # used to access tiles by (x, y) coordinates. MIGHT NOT NEED DEPENDING ON LATER IMPLEMENTATION
         self.tile_data = []  # used for initial sending of tile map to clients
 
         # Tilemap layout (0: empty, 1: ground, 2: platform)
@@ -84,39 +94,53 @@ class GameServer:
         self.sprite_groups["players"].add(player)
 
         # Send initial information (tile map, player location, tile state, etc)
-        conn.sendall(json.dumps(
-            {"type": "INITIAL", 
-             "TileMap": self.tile_data,
-             "Players": self.get_player_state(),
-             "YourPlayer": color,
-             "MapState": self.get_map_state(),
-             }).encode())
+        message = json.dumps(
+                {
+                    "type": "INITIAL",
+                    "TileMap": self.tile_data,
+                    "Players": self.get_player_state(),
+                    "YourPlayer": color,
+                    "MapState": self.get_map_state(),
+                }
+            ).encode()
+        length_message = len(message).to_bytes(4, byteorder="big")
+        conn.sendall(length_message + message)
 
         try:
             while self.running:
                 try:
-                    data = ""
-                    while True:
-                        chunk = conn.recv(2048).decode()
-                        if not chunk:
-                            break
-                        data += chunk
-                        try:
-                            player_data = json.loads(data)
-                            break  # Successfully parsed JSON, exit loop
-                        except json.JSONDecodeError:
-                            # Incomplete JSON, continue receiving
-                            continue
-
+                    length_client = conn.recv(4)
+                    if not length_client:
+                        break
+                    length = int.from_bytes(length_client, byteorder="big")
+                    data = conn.recv(length).decode()
+                    if not data:
+                        break
+                    player_data = json.loads(data)
+                    
                     # Handle client input
                     if player_data["type"] == "DISCONNECT":
-                        conn.sendall("DISCONNECTED".encode())
+                        message = "DISCONNECTED".encode()
+                        length_message = len(message).to_bytes(4, byteorder="big")
+                        conn.sendall(length_message + message)
                         break
 
-                    # Parse client input, PLAYER UPDATE AND TILE UPDATE DO NOT GET DONE HERE
-                    # They are done in the game loop, you must somehow send the input to the game loop
-                    # and then update the player there, maybe saving the input as a tag or in a queue in the player object
-                    # Currently I have tag implemented, but if that doesnt work for you try the queue method
+                    # Handle movement input
+                    elif player_data["type"] == "MOVE":
+                        # player = self.clients[addr]
+                        if player_data["direction"] in ["left", "right"]:
+                            player.direction = player_data["direction"]
+                        else:
+                            print(f"Invalid direction: {player_data['direction']}")
+                    
+                    # Handle jump input 
+                    elif player_data["type"] == "JUMP":
+                        # player = self.clients[addr]
+                        player.jump = True
+                        player.drag_vector = pygame.math.Vector2(
+                            player_data["drag_x"],
+                            player_data["drag_y"]
+                        )
 
                 except socket.timeout:
                     continue
@@ -127,12 +151,13 @@ class GameServer:
             self.unused_colors.append(player.color)
             self.used_colors.remove(player.color)
             with self.lock:
-                del self.clients[addr]
+                if addr in self.clients:
+                    del self.clients[addr]
             print(f"Client {addr} disconnected.")
 
     def get_player_state(self):
         return [
-            {"x": p.position.x, "y": p.position.y, "color": p.color}
+            {"x": p.position.x, "y": p.position.y, "color": p.color, "in_air": p.in_air}
             for p in self.clients.values()
         ]
 
@@ -155,12 +180,14 @@ class GameServer:
             "players": self.get_player_state(),
             "map": self.get_map_state(),
         }
+
         message = json.dumps(game_state).encode()
+        length_message = len(message).to_bytes(4, byteorder="big")
 
         with self.lock:
             for addr, player in list(self.clients.items()):
                 try:
-                    player.conn.sendall(message)
+                    player.conn.sendall(length_message + message)
                 except:
                     print(f"Failed to send to {addr}")
                     del self.clients[addr]
@@ -175,6 +202,16 @@ class GameServer:
             tmp_socket.close()
         except:
             pass
+
+        # Clean up
+        for addr, player in list(self.clients.items()):
+            try:
+                message = json.dumps({"type": "SHUTTING DOWN"}).encode()
+                length_message = len(message).to_bytes(4, byteorder="big")
+                player.conn.sendall(length_message + message)
+                player.conn.close()
+            except:
+                pass
 
     def start(self):
         self.server.bind((self.host, self.port))
@@ -203,28 +240,20 @@ class GameServer:
             print("\nShutting down server...")
         finally:
             self.stop()
-            # Clean up
-            for addr, player in list(self.clients.items()):
-                try:
-                    player.conn.sendall(json.dumps({"type": "SHUTTING DOWN"}).encode())
-                    player.conn.close()
-                except:
-                    pass
             self.server.close()
             print("Server shut down complete")
 
     def game_loop(self):
         """Main game loop running at 60 FPS"""
         while self.running:
-
             # Update all players
             with self.lock:
                 for player in self.clients.values():
                     player.update(self.sprite_groups)
 
             # Update tiles
-            #for tile in self.sprite_groups["platform"]:
-                #tile.update(self.sprite_groups)
+            # for tile in self.sprite_groups["platform"]:
+            # tile.update(self.sprite_groups)
 
             # Broadcast state
             self.broadcast()
