@@ -20,6 +20,7 @@ class Player(pygame.sprite.Sprite):
         self.dragging = False
         self.drag_start_pos = None
         self.drag_vector = pygame.math.Vector2(0, 0)
+        self.in_air = False
         
 
     def update(self, x, y):

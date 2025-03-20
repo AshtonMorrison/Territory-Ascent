@@ -146,19 +146,19 @@ class GameClient:
 
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
         if not me.dragging:
-                if keys[pygame.K_a] and not keys[pygame.K_d]:
-                    message = {"type": "MOVE", "direction": "left"}
-                    conn.sendall(json.dumps(message).encode())
-                elif keys[pygame.K_d] and not keys[pygame.K_a]:
-                    message = {"type": "MOVE", "direction": "right"}
-                    conn.sendall(json.dumps(message).encode())
+            if keys[pygame.K_a] and not keys[pygame.K_d]:
+                message = {"type": "MOVE", "direction": "left"}
+                conn.sendall(json.dumps(message).encode())
+            elif keys[pygame.K_d] and not keys[pygame.K_a]:
+                message = {"type": "MOVE", "direction": "right"}
+                conn.sendall(json.dumps(message).encode())
 
         # Mouse Drag Jumping
-        if mouse_pressed[0] and not me.dragging:
+        if mouse_pressed[0] and not me.in_air and not me.dragging :
             me.dragging = True
             me.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
 
-        if me.dragging:
+        if me.dragging and not me.in_air:
             drag_end_pos = pygame.math.Vector2(mouse_pos)
             me.drag_vector = (
                 me.drag_start_pos - drag_end_pos
@@ -218,14 +218,17 @@ class GameClient:
                         color = player_info["color"]
                         x = player_info["x"]
                         y = player_info["y"]
+                        in_air = player_info["in_air"]  
                         updated_player_colors.add(color)
 
                         with self.lock:
                             if color in self.player_dict:
                                 self.player_dict[color].update(x, y)
+                                self.player_dict[color].in_air = in_air
 
                             else:
                                 self.create_player(color, x, y)
+                                self.player_dict[color].in_air = in_air
 
                     # Remove players that have disconnected
                     for color in current_player_colors - updated_player_colors:
@@ -280,7 +283,7 @@ class GameClient:
         if conn is None:
             print(f"Failed to connect to server with {e}")
             return
-        
+
         self.running = True
 
         # Start update thread

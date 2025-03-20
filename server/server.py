@@ -163,7 +163,7 @@ class GameServer:
 
     def get_player_state(self):
         return [
-            {"x": p.position.x, "y": p.position.y, "color": p.color}
+            {"x": p.position.x, "y": p.position.y, "color": p.color, "in_air": p.in_air}
             for p in self.clients.values()
         ]
 
@@ -247,7 +247,6 @@ class GameServer:
     def game_loop(self):
         """Main game loop running at 60 FPS"""
         while self.running:
-
             # Update all players
             with self.lock:
                 for player in self.clients.values():
