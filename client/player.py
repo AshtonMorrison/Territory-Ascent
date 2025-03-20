@@ -4,7 +4,7 @@ import math
 import os
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, color, x, y, width, height):
+    def __init__(self, color, x, y, width, height, in_air):
         super().__init__()
 
         # Load image
@@ -20,13 +20,16 @@ class Player(pygame.sprite.Sprite):
         self.dragging = False
         self.drag_start_pos = None
         self.drag_vector = pygame.math.Vector2(0, 0)
-        self.in_air = False
+        self.in_air = in_air
         
 
-    def update(self, x, y):
+    def update(self, x, y, in_air):
         
         # Update rect position
         self.rect.bottomleft = (x ,y)
+    
+        # Update in_air status
+        self.in_air = in_air
 
     @staticmethod
     def _load_and_scale_image(path, width, height):

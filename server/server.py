@@ -188,6 +188,7 @@ class GameServer:
         }
         message = json.dumps(game_state).encode()
 
+        print(f"Broadcasting game state to {len(self.clients)} clients")
         with self.lock:
             for addr, player in list(self.clients.items()):
                 try:
@@ -206,6 +207,14 @@ class GameServer:
             tmp_socket.close()
         except:
             pass
+
+        # Clean up
+        for addr, player in list(self.clients.items()):
+            try:
+                player.conn.sendall(json.dumps({"type": "SHUTTING DOWN"}).encode())
+                player.conn.close()
+            except:
+                pass
 
     def start(self):
         self.server.bind((self.host, self.port))
@@ -234,13 +243,6 @@ class GameServer:
             print("\nShutting down server...")
         finally:
             self.stop()
-            # Clean up
-            for addr, player in list(self.clients.items()):
-                try:
-                    player.conn.sendall(json.dumps({"type": "SHUTTING DOWN"}).encode())
-                    player.conn.close()
-                except:
-                    pass
             self.server.close()
             print("Server shut down complete")
 

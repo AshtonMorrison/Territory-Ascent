@@ -83,7 +83,7 @@ class GameClient:
                 player_data = initial_data["Players"]
                 for player_info in player_data:
                     self.create_player(
-                        player_info["color"], player_info["x"], player_info["y"]
+                        player_info["color"], player_info["x"], player_info["y"], player_info["in_air"]
                     )
 
                 # TO DO WHEN TILES UPDATE AND A PLAYER JOINS LATE INTO THE GAME
@@ -132,9 +132,9 @@ class GameClient:
             )
 
     def create_player(
-        self, color, x, y
+        self, color, x, y, in_air
     ):  # Used to create a player from info from server
-        self.player_dict[color] = Player(color, x, y, self.tile_size, self.tile_size)
+        self.player_dict[color] = Player(color, x, y, self.tile_size, self.tile_size, in_air)
 
     def handle_inputs(
         self, conn
@@ -185,19 +185,34 @@ class GameClient:
     ):  # Used to update the game state from the servers broadcast (Player locations, tile colors), RUNS ON SEPERATE THREAD
         try:
             while self.running:
+
                 # Receive data
                 data = ""
-                while True:
-                    chunk = conn.recv(2048).decode()
-                    if not chunk:
-                        break
-                    data += chunk
+                while self.running:
                     try:
-                        update_data = json.loads(data)
-                        break  # Successfully parsed JSON, exit loop
-                    except json.JSONDecodeError:
-                        # Incomplete JSON, continue receiving
-                        continue
+                        chunk = conn.recv(2048).decode()
+                        if not chunk:
+                            print("Server closed connection")
+                            self.running = False
+                            break
+                        data += chunk
+
+                        # Try parsing the JSON
+                        try:
+                            update_data = json.loads(data)
+                            break 
+                        except json.JSONDecodeError:
+                            if len(data) > 8192:  # Arbitrary limit to prevent excessive looping
+                                print("Data is corrupt, resetting buffer.")
+                                data = ""
+                            continue  # Continue receiving
+                    except socket.error as e:
+                        print(f"Socket error during update (receiving): {e}")
+                        self.running = False
+                        break
+
+                if not self.running:
+                    break
 
                 if not data:
                     break
@@ -206,12 +221,15 @@ class GameClient:
                 if update_data["type"] == "SHUTTING DOWN":
                     print("Server Shut Down")
                     self.running = False
+
                 if update_data["type"] == "STATE":
                     # Update player locations
                     player_data = update_data["players"]
 
                     # Check for new players and update existing players
-                    current_player_colors = set(self.player_dict.keys())
+                    current_player_colors = set()
+                    with self.lock:
+                        current_player_colors = set(self.player_dict.keys())
                     updated_player_colors = set()
 
                     for player_info in player_data:
@@ -223,17 +241,15 @@ class GameClient:
 
                         with self.lock:
                             if color in self.player_dict:
-                                self.player_dict[color].update(x, y)
-                                self.player_dict[color].in_air = in_air
+                                self.player_dict[color].update(x, y, in_air)
 
                             else:
-                                self.create_player(color, x, y)
-                                self.player_dict[color].in_air = in_air
+                                self.create_player(color, x, y, in_air)
 
-                    # Remove players that have disconnected
-                    for color in current_player_colors - updated_player_colors:
-                        with self.lock:
-                            del self.player_dict[color]
+                        # Remove players that have disconnected
+                        for color in current_player_colors - updated_player_colors:
+                            with self.lock:
+                                del self.player_dict[color]
 
                     # TO DO WHEN TILES UPDATE
                     # map_data = update_data["map"]
@@ -241,6 +257,12 @@ class GameClient:
 
         except socket.error as e:
             print(f"Socket error during update: {e}")
+        finally:
+            with self.lock:
+                try:
+                    conn.close()
+                except:
+                    pass
 
     def draw(self):
         # Make background white
