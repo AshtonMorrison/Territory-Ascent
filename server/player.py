@@ -67,6 +67,9 @@ class Player(pygame.sprite.Sprite):
         touched_ground = pygame.sprite.spritecollide(self, tile_groups["ground"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
         touched_platform = pygame.sprite.spritecollide(self, tile_groups["platform"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
 
+        if not touched_ground and not touched_platform:
+            self.in_air = True
+
         # Ground Collision, TO BE CHANGED IF HOLES ARE ADDED TO MAP
         if touched_ground:
             self.velocity.y = 0
