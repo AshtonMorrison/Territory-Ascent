@@ -94,8 +94,7 @@ class GameServer:
         self.sprite_groups["players"].add(player)
 
         # Send initial information (tile map, player location, tile state, etc)
-        conn.sendall(
-            json.dumps(
+        message = json.dumps(
                 {
                     "type": "INITIAL",
                     "TileMap": self.tile_data,
@@ -104,33 +103,27 @@ class GameServer:
                     "MapState": self.get_map_state(),
                 }
             ).encode()
-        )
+        length_message = len(message).to_bytes(4, byteorder="big")
+        conn.sendall(length_message + message)
 
         try:
             while self.running:
                 try:
-                    data = ""
-                    while True:
-                        chunk = conn.recv(2048).decode()
-                        if not chunk:
-                            break
-                        data += chunk
-                        try:
-                            player_data = json.loads(data)
-                            break  # Successfully parsed JSON, exit loop
-                        except json.JSONDecodeError:
-                            # Incomplete JSON, continue receiving
-                            continue
-
+                    length_client = conn.recv(4)
+                    if not length_client:
+                        break
+                    length = int.from_bytes(length_client, byteorder="big")
+                    data = conn.recv(length).decode()
+                    if not data:
+                        break
+                    player_data = json.loads(data)
+                    
                     # Handle client input
                     if player_data["type"] == "DISCONNECT":
-                        conn.sendall("DISCONNECTED".encode())
+                        message = "DISCONNECTED".encode()
+                        length_message = len(message).to_bytes(4, byteorder="big")
+                        conn.sendall(length_message + message)
                         break
-
-                    # Parse client input, PLAYER UPDATE AND TILE UPDATE DO NOT GET DONE HERE
-                    # They are done in the game loop, you must somehow send the input to the game loop
-                    # and then update the player there, maybe saving the input as a tag or in a queue in the player object
-                    # Currently I have tag implemented, but if that doesnt work for you try the queue method
 
                     # Handle movement input
                     elif player_data["type"] == "MOVE":
@@ -158,7 +151,8 @@ class GameServer:
             self.unused_colors.append(player.color)
             self.used_colors.remove(player.color)
             with self.lock:
-                del self.clients[addr]
+                if addr in self.clients:
+                    del self.clients[addr]
             print(f"Client {addr} disconnected.")
 
     def get_player_state(self):
@@ -186,13 +180,14 @@ class GameServer:
             "players": self.get_player_state(),
             "map": self.get_map_state(),
         }
-        message = json.dumps(game_state).encode()
 
-        print(f"Broadcasting game state to {len(self.clients)} clients")
+        message = json.dumps(game_state).encode()
+        length_message = len(message).to_bytes(4, byteorder="big")
+
         with self.lock:
             for addr, player in list(self.clients.items()):
                 try:
-                    player.conn.sendall(message)
+                    player.conn.sendall(length_message + message)
                 except:
                     print(f"Failed to send to {addr}")
                     del self.clients[addr]
@@ -211,7 +206,9 @@ class GameServer:
         # Clean up
         for addr, player in list(self.clients.items()):
             try:
-                player.conn.sendall(json.dumps({"type": "SHUTTING DOWN"}).encode())
+                message = json.dumps({"type": "SHUTTING DOWN"}).encode()
+                length_message = len(message).to_bytes(4, byteorder="big")
+                player.conn.sendall(length_message + message)
                 player.conn.close()
             except:
                 pass

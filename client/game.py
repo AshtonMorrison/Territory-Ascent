@@ -49,26 +49,24 @@ class GameClient:
             print(f"Connected to {server_address}")
 
             # Receive initial data
-            data = ""
-            while True:
-                chunk = conn.recv(2048).decode()
-                if not chunk:
-                    break
-                data += chunk
-                try:
-                    initial_data = json.loads(data)
-                    break  # Successfully parsed JSON, exit loop
-                except json.JSONDecodeError:
-                    # Incomplete JSON, continue receiving
-                    continue
+            length_server = conn.recv(4)
+            if not length_server:
+                conn.close()
+                return None, "Error: No data received from server"
+            length = int.from_bytes(length_server, byteorder="big")
+            data = conn.recv(length).decode()
+
+            if not data:
+                conn.close()
+                return None, "Error: No data received from server"
+            
+            initial_data = json.loads(data)
 
             # Check for error message
             if initial_data == "Error: No more colors available":
                 e = "Error: Server full, No more player slots available"
                 conn.close()
                 return None, e
-
-            initial_data = json.loads(data)
 
             # Parse initial data
             if initial_data["type"] == "INITIAL":
@@ -104,11 +102,17 @@ class GameClient:
         try:
             with self.lock:
                 # Send disconnect message to server
-                message = {"type": "DISCONNECT"}
-                conn.sendall(json.dumps(message).encode())
+                message = json.dumps({"type": "DISCONNECT"}).encode()
+                length_message = len(message).to_bytes(4, byteorder="big")
+                conn.sendall(length_message + message)
 
                 # Receive confirmation from server
-                response = conn.recv(2048).decode()
+                length_server = conn.recv(4)
+                if not length_server:
+                    print("Error: No data received from server")
+
+                length = int.from_bytes(length_server, byteorder="big")
+                response = conn.recv(length).decode()
                 if response == "DISCONNECTED":
                     print("Successfully disconnected from server")
                 else:
@@ -147,11 +151,13 @@ class GameClient:
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
         if not me.dragging and not me.in_air:
             if keys[pygame.K_a] and not keys[pygame.K_d]:
-                message = {"type": "MOVE", "direction": "left"}
-                conn.sendall(json.dumps(message).encode())
+                message = json.dumps({"type": "MOVE", "direction": "left"}).encode()
+                length_message = len(message).to_bytes(4, byteorder="big")
+                conn.sendall(length_message + message)
             elif keys[pygame.K_d] and not keys[pygame.K_a]:
-                message = {"type": "MOVE", "direction": "right"}
-                conn.sendall(json.dumps(message).encode())
+                message = json.dumps({"type": "MOVE", "direction": "right"}).encode()
+                length_message = len(message).to_bytes(4, byteorder="big")
+                conn.sendall(length_message + message)
 
         # Mouse Drag Jumping
         if mouse_pressed[0] and not me.in_air and not me.dragging :
@@ -172,13 +178,13 @@ class GameClient:
             if not mouse_pressed[0]:
                 me.dragging = False
                 # Send jump message with drag vector
-                message = {
+                message = json.dumps({
                     "type": "JUMP",
                     "drag_x": me.drag_vector.x,
                     "drag_y": me.drag_vector.y,
-                }
-                conn.sendall(json.dumps(message).encode())
-        pass
+                }).encode()
+                length_message = len(message).to_bytes(4, byteorder="big")
+                conn.sendall(length_message + message)
 
     def update(
         self, conn
@@ -186,36 +192,16 @@ class GameClient:
         try:
             while self.running:
 
-                # Receive data
-                data = ""
-                while self.running:
-                    try:
-                        chunk = conn.recv(2048).decode()
-                        if not chunk:
-                            print("Server closed connection")
-                            self.running = False
-                            break
-                        data += chunk
-
-                        # Try parsing the JSON
-                        try:
-                            update_data = json.loads(data)
-                            break 
-                        except json.JSONDecodeError:
-                            if len(data) > 8192:  # Arbitrary limit to prevent excessive looping
-                                print("Data is corrupt, resetting buffer.")
-                                data = ""
-                            continue  # Continue receiving
-                    except socket.error as e:
-                        print(f"Socket error during update (receiving): {e}")
-                        self.running = False
-                        break
-
-                if not self.running:
+                length_server = conn.recv(4)
+                if not length_server:
                     break
+                length = int.from_bytes(length_server, byteorder="big")
+                data = conn.recv(length).decode()
 
                 if not data:
                     break
+
+                update_data = json.loads(data)
 
                 # Parse update data
                 if update_data["type"] == "SHUTTING DOWN":
@@ -258,11 +244,7 @@ class GameClient:
         except socket.error as e:
             print(f"Socket error during update: {e}")
         finally:
-            with self.lock:
-                try:
-                    conn.close()
-                except:
-                    pass
+            self.running = False
 
     def draw(self):
         # Make background white
