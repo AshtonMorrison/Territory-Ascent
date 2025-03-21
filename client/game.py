@@ -44,7 +44,7 @@ class GameClient:
             server_address = (
                 ip,
                 constants.PORT,
-            )  # Replace with your server's IP and port
+            ) 
             conn.connect(server_address)
             print(f"Connected to {server_address}")
 
