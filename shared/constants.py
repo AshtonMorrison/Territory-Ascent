@@ -5,7 +5,7 @@ HOST = "localhost" # Will change later when server side gets made
 # Game settings
 SCREEN_WIDTH = 640 
 SCREEN_HEIGHT = 360
-FPS = 30
+FPS = 60
 
 # Tile settings
 TILE_SIZE = 16
