@@ -59,7 +59,7 @@ class GameClient:
             if not data:
                 conn.close()
                 return None, "Error: No data received from server"
-            
+            print(data)
             initial_data = json.loads(data)
 
             # Check for error message
@@ -200,7 +200,9 @@ class GameClient:
 
                 if not data:
                     break
-
+                print("DATAAA \n \n \n")
+                print(data)
+                print("\n\n\n")
                 update_data = json.loads(data)
 
                 # Parse update data
