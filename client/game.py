@@ -60,6 +60,7 @@ class GameClient:
                 conn.close()
                 return None, "Error: No data received from server"
             print(data)
+
             initial_data = json.loads(data)
 
             # Check for error message
@@ -203,8 +204,10 @@ class GameClient:
                 print("DATAAA \n \n \n")
                 print(data)
                 print("\n\n\n")
-                update_data = json.loads(data)
-
+                try:
+                    update_data = json.loads(data)
+                except:
+                    continue
                 # Parse update data
                 if update_data["type"] == "SHUTTING DOWN":
                     print("Server Shut Down")
