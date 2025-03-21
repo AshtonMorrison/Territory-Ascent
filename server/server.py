@@ -280,7 +280,7 @@ class GameServer:
             self.broadcast()
 
             # Maintain 60 FPS
-            self.clock.tick(60)
+            self.clock.tick(constants.FPS)
 
 
 if __name__ == "__main__":
