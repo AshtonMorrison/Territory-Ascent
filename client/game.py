@@ -33,6 +33,28 @@ class GameClient:
 
         self.running = False
 
+    def receive_message(self, sock):
+        # First, receive the 4-byte header that contains the length
+        length_data = b""
+        while len(length_data) < 4:
+            chunk = sock.recv(4 - len(length_data))
+            if not chunk:
+                raise Exception("Error: Connection lost while receiving length header.")
+            length_data += chunk
+
+        # Convert the 4-byte length data to an integer
+        message_length = int.from_bytes(length_data, byteorder="big")
+
+        # Now, receive the actual message of the specified length
+        message_data = b""
+        while len(message_data) < message_length:
+            chunk = sock.recv(message_length - len(message_data))
+            if not chunk:
+                raise Exception("Error: Connection lost while receiving message.")
+            message_data += chunk
+
+        return message_data
+
     def connect(self):  # Used to connect to server and parse initial data from server
         try:
             ip = input("Enter the server IP: ")
@@ -49,16 +71,12 @@ class GameClient:
             print(f"Connected to {server_address}")
 
             # Receive initial data
-            length_server = conn.recv(4)
-            if not length_server:
+            try:
+                data = self.receive_message(conn).decode()
+            except Exception as e:
                 conn.close()
-                return None, "Error: No data received from server"
-            length = int.from_bytes(length_server, byteorder="big")
-            data = conn.recv(length).decode()
+                return None, str(e)
 
-            if not data:
-                conn.close()
-                return None, "Error: No data received from server"
             print(data)
 
             initial_data = json.loads(data)
@@ -82,7 +100,10 @@ class GameClient:
                 player_data = initial_data["Players"]
                 for player_info in player_data:
                     self.create_player(
-                        player_info["color"], player_info["x"], player_info["y"], player_info["in_air"]
+                        player_info["color"],
+                        player_info["x"],
+                        player_info["y"],
+                        player_info["in_air"],
                     )
 
                 # TO DO WHEN TILES UPDATE AND A PLAYER JOINS LATE INTO THE GAME
@@ -108,16 +129,14 @@ class GameClient:
                 conn.sendall(length_message + message)
 
                 # Receive confirmation from server
-                length_server = conn.recv(4)
-                if not length_server:
-                    print("Error: No data received from server")
-
-                length = int.from_bytes(length_server, byteorder="big")
-                response = conn.recv(length).decode()
-                if response == "DISCONNECTED":
-                    print("Successfully disconnected from server")
-                else:
-                    print("Error: Disconnection confirmation not received")
+                try:
+                    response = self.receive_message(conn).decode()
+                    if response == "DISCONNECTED":
+                        print("Successfully disconnected from server")
+                    else:
+                        print("Error: Disconnection confirmation not received")
+                except Exception as e:
+                    print(f"Error during disconnection: {e}")
 
         except socket.error as e:
             print(f"Socket error during disconnection: {e}")
@@ -139,7 +158,9 @@ class GameClient:
     def create_player(
         self, color, x, y, in_air
     ):  # Used to create a player from info from server
-        self.player_dict[color] = Player(color, x, y, self.tile_size, self.tile_size, in_air)
+        self.player_dict[color] = Player(
+            color, x, y, self.tile_size, self.tile_size, in_air
+        )
 
     def handle_inputs(
         self, conn
@@ -161,7 +182,7 @@ class GameClient:
                 conn.sendall(length_message + message)
 
         # Mouse Drag Jumping
-        if mouse_pressed[0] and not me.in_air and not me.dragging :
+        if mouse_pressed[0] and not me.in_air and not me.dragging:
             me.dragging = True
             me.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
 
@@ -179,11 +200,13 @@ class GameClient:
             if not mouse_pressed[0]:
                 me.dragging = False
                 # Send jump message with drag vector
-                message = json.dumps({
-                    "type": "JUMP",
-                    "drag_x": me.drag_vector.x,
-                    "drag_y": me.drag_vector.y,
-                }).encode()
+                message = json.dumps(
+                    {
+                        "type": "JUMP",
+                        "drag_x": me.drag_vector.x,
+                        "drag_y": me.drag_vector.y,
+                    }
+                ).encode()
                 length_message = len(message).to_bytes(4, byteorder="big")
                 conn.sendall(length_message + message)
 
@@ -192,59 +215,58 @@ class GameClient:
     ):  # Used to update the game state from the servers broadcast (Player locations, tile colors), RUNS ON SEPERATE THREAD
         try:
             while self.running:
-
-                length_server = conn.recv(4)
-                if not length_server:
-                    break
-                length = int.from_bytes(length_server, byteorder="big")
-                data = conn.recv(length).decode()
-
-                if not data:
-                    break
-                print("DATAAA \n \n \n")
-                print(data)
-                print("\n\n\n")
                 try:
-                    update_data = json.loads(data)
-                except:
-                    continue
-                # Parse update data
-                if update_data["type"] == "SHUTTING DOWN":
-                    print("Server Shut Down")
-                    self.running = False
+                    data = self.receive_message(conn).decode()
 
-                if update_data["type"] == "STATE":
-                    # Update player locations
-                    player_data = update_data["players"]
+                    try:
+                        update_data = json.loads(data)
+                    except json.JSONDecodeError as e:
+                        print(f"JSON decode error: {e}")
+                        print(f"Received data: {data}")
+                        continue
 
-                    # Check for new players and update existing players
-                    current_player_colors = set()
-                    with self.lock:
-                        current_player_colors = set(self.player_dict.keys())
-                    updated_player_colors = set()
+                    # Parse update data
+                    if update_data["type"] == "SHUTTING DOWN":
+                        print("Server Shut Down")
+                        self.running = False
+                        break
 
-                    for player_info in player_data:
-                        color = player_info["color"]
-                        x = player_info["x"]
-                        y = player_info["y"]
-                        in_air = player_info["in_air"]  
-                        updated_player_colors.add(color)
+                    if update_data["type"] == "STATE":
+                        # Update player locations
+                        player_data = update_data["players"]
 
+                        # Check for new players and update existing players
+                        current_player_colors = set()
                         with self.lock:
-                            if color in self.player_dict:
-                                self.player_dict[color].update(x, y, in_air)
+                            current_player_colors = set(self.player_dict.keys())
+                        updated_player_colors = set()
 
-                            else:
-                                self.create_player(color, x, y, in_air)
+                        for player_info in player_data:
+                            color = player_info["color"]
+                            x = player_info["x"]
+                            y = player_info["y"]
+                            in_air = player_info["in_air"]
+                            updated_player_colors.add(color)
 
-                        # Remove players that have disconnected
-                        for color in current_player_colors - updated_player_colors:
                             with self.lock:
-                                del self.player_dict[color]
+                                if color in self.player_dict:
+                                    self.player_dict[color].update(x, y, in_air)
 
-                    # TO DO WHEN TILES UPDATE
-                    # map_data = update_data["map"]
-                    # call tile.update() for each tile in map_data to change its color
+                                else:
+                                    self.create_player(color, x, y, in_air)
+
+                            # Remove players that have disconnected
+                            for color in current_player_colors - updated_player_colors:
+                                with self.lock:
+                                    del self.player_dict[color]
+
+                        # TO DO WHEN TILES UPDATE
+                        # map_data = update_data["map"]
+                        # call tile.update() for each tile in map_data to change its color
+                except Exception as e:
+                    print(f"Error receiving message: {e}")
+                    self.running = False
+                    break
 
         except socket.error as e:
             print(f"Socket error during update: {e}")

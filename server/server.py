@@ -81,6 +81,28 @@ class GameServer:
                     )
                     self.tile_data.append({"x": x, "y": y, "type": 2})
 
+    def receive_message(self, sock):
+        # First, receive the 4-byte header that contains the length
+        length_data = b""
+        while len(length_data) < 4:
+            chunk = sock.recv(4 - len(length_data))
+            if not chunk:
+                raise Exception("Error: Connection lost while receiving length header.")
+            length_data += chunk
+
+        # Convert the 4-byte length data to an integer
+        message_length = int.from_bytes(length_data, byteorder="big")
+
+        # Now, receive the actual message of the specified length
+        message_data = b""
+        while len(message_data) < message_length:
+            chunk = sock.recv(message_length - len(message_data))
+            if not chunk:
+                raise Exception("Error: Connection lost while receiving message.")
+            message_data += chunk
+
+        return message_data
+
     def handle_client(self, conn, addr):
         print(f"New connection: {addr}")
         color = self.get_color()
@@ -95,52 +117,50 @@ class GameServer:
 
         # Send initial information (tile map, player location, tile state, etc)
         message = json.dumps(
-                {
-                    "type": "INITIAL",
-                    "TileMap": self.tile_data,
-                    "Players": self.get_player_state(),
-                    "YourPlayer": color,
-                    "MapState": self.get_map_state(),
-                }
-            ).encode()
+            {
+                "type": "INITIAL",
+                "TileMap": self.tile_data,
+                "Players": self.get_player_state(),
+                "YourPlayer": color,
+                "MapState": self.get_map_state(),
+            }
+        ).encode()
         length_message = len(message).to_bytes(4, byteorder="big")
         conn.sendall(length_message + message)
 
         try:
             while self.running:
                 try:
-                    length_client = conn.recv(4)
-                    if not length_client:
-                        break
-                    length = int.from_bytes(length_client, byteorder="big")
-                    data = conn.recv(length).decode()
-                    if not data:
-                        break
-                    player_data = json.loads(data)
-                    
-                    # Handle disconnect input
-                    if player_data["type"] == "DISCONNECT":
-                        message = "DISCONNECTED".encode()
-                        length_message = len(message).to_bytes(4, byteorder="big")
-                        conn.sendall(length_message + message)
-                        break
+                    try:
+                        data = self.receive_message(conn).decode()
+                        player_data = json.loads(data)
 
-                    # Handle movement input
-                    elif player_data["type"] == "MOVE":
-                        # player = self.clients[addr]
-                        if player_data["direction"] in ["left", "right"]:
-                            player.direction = player_data["direction"]
-                        else:
-                            print(f"Invalid direction: {player_data['direction']}")
-                    
-                    # Handle jump input 
-                    elif player_data["type"] == "JUMP":
-                        # player = self.clients[addr]
-                        player.jump = True
-                        player.drag_vector = pygame.math.Vector2(
-                            player_data["drag_x"],
-                            player_data["drag_y"]
-                        )
+                        # Handle disconnect input
+                        if player_data["type"] == "DISCONNECT":
+                            message = "DISCONNECTED".encode()
+                            length_message = len(message).to_bytes(4, byteorder="big")
+                            conn.sendall(length_message + message)
+                            break
+
+                        # Handle movement input
+                        elif player_data["type"] == "MOVE":
+                            # player = self.clients[addr]
+                            if player_data["direction"] in ["left", "right"]:
+                                player.direction = player_data["direction"]
+                            else:
+                                print(f"Invalid direction: {player_data['direction']}")
+
+                        # Handle jump input
+                        elif player_data["type"] == "JUMP":
+                            # player = self.clients[addr]
+                            player.jump = True
+                            player.drag_vector = pygame.math.Vector2(
+                                player_data["drag_x"], player_data["drag_y"]
+                            )
+
+                    except Exception as e:
+                        print(f"Error processing message from {addr}: {e}")
+                        break
 
                 except socket.timeout:
                     continue
