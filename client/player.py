@@ -24,6 +24,7 @@ class Player(pygame.sprite.Sprite):
         self.preserve_drag_state = ( False )
 
     def update(self, x, y, in_air):
+        
         # Save drag state if needed
         drag_info = None
         if self.preserve_drag_state and self.dragging:

@@ -28,6 +28,8 @@ class Player(pygame.sprite.Sprite):
 
         # Server side stuff
         self.conn = None
+        self.addr = None
+        
         # POTENTIALLY ADD TAGS FOR MOVEMENT TO GO FROM CLIENT HANDLE TO GAME LOOP UPDATE
         self.direction = None
         self.jump = False
@@ -79,6 +81,19 @@ class Player(pygame.sprite.Sprite):
 
         # Platform Collision
         if touched_platform:
+
+            # Check for occupied platforms
+            for tile in touched_platform:
+                if tile.occupied_by is not None and tile.occupied_by != self.color:
+                    # RESET POSITION
+                    next_position = pygame.math.Vector2(320, 100) # TEMPORARY LOCATION
+                    self.velocity.x = 0
+                    self.acceleration.x = 0
+
+                else:
+                    if self.velocity.y > 0 and next_rect.bottom > tile.rect.top and self.rect.bottom < tile.rect.top + 1: # Make sure player is on top of platform
+                        tile.occupied_by = self.color
+
             tile = touched_platform[0]
 
             # Horizontal Collision

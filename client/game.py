@@ -21,6 +21,9 @@ class GameClient:
         # Clock for FPS
         self.clock = pygame.time.Clock()
 
+        # Connection
+        self.conn = None
+
         # Tile Dictionary
         self.tile_dict = {}
         self.tile_size = constants.TILE_SIZE
@@ -105,10 +108,6 @@ class GameClient:
                         player_info["y"],
                         player_info["in_air"],
                     )
-
-                # TO DO WHEN TILES UPDATE AND A PLAYER JOINS LATE INTO THE GAME
-                # map_data = initial_data["MapState"]
-                # call tile.update() for each tile in map_data to change its color
 
             else:
                 e = "Error: Invalid initial data received from server"
@@ -262,9 +261,15 @@ class GameClient:
                             with self.lock:
                                 del self.player_dict[color]
 
-                        # TO DO WHEN TILES UPDATE
-                        # map_data = update_data["map"]
-                        # call tile.update() for each tile in map_data to change its color
+
+                        # Update tile colors
+                        tile_data = update_data["tiles"]
+                        for tile_info in tile_data:
+                            x = tile_info["x"]
+                            y = tile_info["y"]
+                            color = tile_info["color"]
+                            self.tile_dict[(x, y)].update(color)
+                            
                 except Exception as e:
                     print(f"Error receiving message: {e}")
                     self.running = False
@@ -311,16 +316,17 @@ class GameClient:
             pygame.draw.line(self.screen, (0, 0, 255), end_pos, right_arrow, 3)
 
     def run(self):  # RUNS ON MAIN THREAD
-        conn, e = self.connect()
+        
+        self.conn, e = self.connect()
 
-        if conn is None:
+        if self.conn is None:
             print(f"Failed to connect to server with {e}")
             return
 
         self.running = True
 
         # Start update thread
-        update_thread = threading.Thread(target=self.update, args=(conn,))
+        update_thread = threading.Thread(target=self.update, args=(self.conn,))
         update_thread.daemon = True
         update_thread.start()
 
@@ -332,7 +338,7 @@ class GameClient:
 
             # Everything gets done to the back buffer
             # Input handling
-            self.handle_inputs(conn)
+            self.handle_inputs(self.conn)
 
             # Drawing
             self.draw()
@@ -344,10 +350,15 @@ class GameClient:
             pygame.display.flip()
 
         update_thread.join()
-        self.disconnect(conn)
+        self.disconnect(self.conn)
         pygame.quit()
 
 
 if __name__ == "__main__":
     client = GameClient()
-    client.run()
+    try:
+        client.run()
+    except KeyboardInterrupt:
+        client.disconnect(client.conn)
+        pygame.quit()
+

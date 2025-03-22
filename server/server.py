@@ -15,7 +15,6 @@ class GameServer:
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.running = True
         self.server.settimeout(1.0)
-        self.clients = {}  # Maps client address to player objects
 
         self.sprite_groups = {
             "ground": pygame.sprite.Group(),  # Used for Collision
@@ -41,9 +40,7 @@ class GameServer:
 
         # Tilemap
         self.tile_size = constants.TILE_SIZE
-        self.tile_dict = (
-            {}
-        )  # used to access tiles by (x, y) coordinates. MIGHT NOT NEED DEPENDING ON LATER IMPLEMENTATION
+        self.changed_tiles = []  # used for sending tile changes to clients
         self.tile_data = []  # used for initial sending of tile map to clients
 
         # Tilemap layout (0: empty, 1: ground, 2: platform)
@@ -52,6 +49,7 @@ class GameServer:
         self.create_tile_map()
 
     def create_tile_map(self):
+        self.tile_data = []
         for row in range(len(self.tile_map)):
             for col in range(len(self.tile_map[row])):
                 x = col * self.tile_size
@@ -59,7 +57,7 @@ class GameServer:
 
                 # Ground
                 if self.tile_map[row][col] == 1:
-                    self.tile_dict[(x, y)] = Tile(
+                    Tile(
                         x,
                         y,
                         self.tile_size,
@@ -71,7 +69,7 @@ class GameServer:
 
                 # Platform
                 elif self.tile_map[row][col] == 2:
-                    self.tile_dict[(x, y)] = Tile(
+                    Tile(
                         x,
                         y,
                         self.tile_size,
@@ -112,7 +110,7 @@ class GameServer:
             return
         player = Player(color, 100, 100, self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
-        self.clients[addr] = player
+        player.addr = addr  # Store address
         self.sprite_groups["players"].add(player)
 
         # Send initial information (tile map, player location, tile state, etc)
@@ -122,7 +120,6 @@ class GameServer:
                 "TileMap": self.tile_data,
                 "Players": self.get_player_state(),
                 "YourPlayer": color,
-                "MapState": self.get_map_state(),
             }
         ).encode()
         length_message = len(message).to_bytes(4, byteorder="big")
@@ -171,21 +168,14 @@ class GameServer:
             self.unused_colors.append(player.color)
             self.used_colors.remove(player.color)
             with self.lock:
-                if addr in self.clients:
-                    self.sprite_groups["players"].remove(self.clients[addr])
-                    del self.clients[addr]
+                self.sprite_groups["players"].remove(player)
             print(f"Client {addr} disconnected.")
 
     def get_player_state(self):
         return [
             {"x": p.position.x, "y": p.position.y, "color": p.color, "in_air": p.in_air}
-            for p in self.clients.values()
+            for p in self.sprite_groups["players"]
         ]
-
-    def get_map_state(self):
-        # TO BE ADDED FOR WHEN TILES ACTUALLY CHANGE
-        # So, [{"x": t.x, "y": t.y, "color": t.color} for t in self.updated_tiles] or something similar
-        pass
 
     def get_color(self):
         if len(self.unused_colors) == 0:
@@ -199,19 +189,19 @@ class GameServer:
         game_state = {
             "type": "STATE",
             "players": self.get_player_state(),
-            "map": self.get_map_state(),
+            "tiles": self.changed_tiles
         }
 
         message = json.dumps(game_state).encode()
         length_message = len(message).to_bytes(4, byteorder="big")
 
         with self.lock:
-            for addr, player in list(self.clients.items()):
+            for player in self.sprite_groups["players"]:
                 try:
                     player.conn.sendall(length_message + message)
                 except:
-                    print(f"Failed to send to {addr}")
-                    del self.clients[addr]
+                    print(f"Failed to send to {player.addr}")
+                    self.sprite_groups["players"].remove(player)
 
     def stop(self):
         """Cleanly stop the server"""
@@ -225,7 +215,7 @@ class GameServer:
             pass
 
         # Clean up
-        for addr, player in list(self.clients.items()):
+        for player in self.sprite_groups["players"]:
             try:
                 message = json.dumps({"type": "SHUTTING DOWN"}).encode()
                 length_message = len(message).to_bytes(4, byteorder="big")
@@ -269,15 +259,21 @@ class GameServer:
         while self.running:
             # Update all players
             with self.lock:
-                for player in self.clients.values():
+                for player in self.sprite_groups["players"]:
                     player.update(self.sprite_groups)
 
-            # Update tiles
-            # for tile in self.sprite_groups["platform"]:
-            # tile.update(self.sprite_groups)
+                for tile in self.sprite_groups["platform"]:
+                    changed = tile.update(self.sprite_groups["players"])
+                    if changed:
+                        self.changed_tiles.append(
+                            {"x": tile.rect.x, "y": tile.rect.y, "color": tile.color}
+                        )
 
             # Broadcast state
             self.broadcast()
+
+            # Clear changed tiles
+            self.changed_tiles = []
 
             # Maintain 60 FPS
             self.clock.tick(constants.FPS)
