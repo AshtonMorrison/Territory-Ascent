@@ -9,9 +9,9 @@ class Tile(pygame.sprite.Sprite):
 
         self.width = width
         self.height = height
+        self.image = pygame.Surface([self.width, self.height])
 
         if image_integer == 1:
-            self.image = pygame.Surface([self.width, self.height])
             ground_color = (170, 120, 80)
             border_color = (150, 100, 60)
 
@@ -22,7 +22,6 @@ class Tile(pygame.sprite.Sprite):
 
 
         if image_integer == 2:
-            self.image = pygame.Surface([self.width, self.height])
             platform_color = (
                 constants.DEFAULT_PLATFORM_COLOR
             )  # Use default platform color for now; will have to adjust for coloured occupation later
@@ -35,6 +34,14 @@ class Tile(pygame.sprite.Sprite):
             self.image.fill(border_color)
             pygame.draw.rect(
                 self.image, platform_color, [0, self.height // 2, self.width, self.height // 2]
+            )
+
+        if image_integer == 3:
+            goal_color = (0, 0, 0) 
+
+            self.image.fill(goal_color)
+            pygame.draw.rect(
+                self.image, goal_color, [0, height // 2, width, height // 2]
             )
 
         # Get rects and positions

@@ -1,7 +1,5 @@
 import pygame
 from shared import constants
-import math
-import os
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, color, x, y, width, height):
@@ -68,7 +66,10 @@ class Player(pygame.sprite.Sprite):
         # Collision detection for next position
         touched_ground = pygame.sprite.spritecollide(self, tile_groups["ground"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
         touched_platform = pygame.sprite.spritecollide(self, tile_groups["platform"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
+        touched_goal = pygame.sprite.spritecollide(self, tile_groups["goal"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
 
+        if touched_goal:
+            return True
         if not touched_ground and not touched_platform:
             self.in_air = True
 
@@ -136,10 +137,4 @@ class Player(pygame.sprite.Sprite):
         self.position = next_position
         self.rect.bottomleft = self.position
 
-    @staticmethod
-    def _load_and_scale_image(path, width, height):
-        try:
-            image = pygame.image.load(os.path.join("client", path))
-            return pygame.transform.scale(image, (width, height))
-        except (pygame.error, FileNotFoundError):
-            return None
+        return False

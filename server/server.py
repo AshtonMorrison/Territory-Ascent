@@ -19,6 +19,7 @@ class GameServer:
         self.sprite_groups = {
             "ground": pygame.sprite.Group(),  # Used for Collision
             "platform": pygame.sprite.Group(),  # Used for Collision
+            "goal": pygame.sprite.Group(),  # Used for Collision
             "players": pygame.sprite.Group(),  # Used for Collision
         }
 
@@ -43,10 +44,13 @@ class GameServer:
         self.changed_tiles = []  # used for sending tile changes to clients
         self.tile_data = []  # used for initial sending of tile map to clients
 
-        # Tilemap layout (0: empty, 1: ground, 2: platform)
+        # Tilemap layout (0: empty, 1: ground, 2: platform, 3: goal)
         self.tile_map = sample_tile_map
 
         self.create_tile_map()
+
+        # Game Logic
+        self.winner = None
 
     def create_tile_map(self):
         self.tile_data = []
@@ -78,6 +82,18 @@ class GameServer:
                         self.sprite_groups["platform"],
                     )
                     self.tile_data.append({"x": x, "y": y, "type": 2})
+                
+                # Goal
+                elif self.tile_map[row][col] == 3:
+                    Tile(
+                        x,
+                        y,
+                        self.tile_size,
+                        self.tile_size,
+                        3,
+                        self.sprite_groups["goal"],
+                    )
+                    self.tile_data.append({"x": x, "y": y, "type": 3})
 
     def receive_message(self, sock):
         # First, receive the 4-byte header that contains the length
@@ -254,13 +270,30 @@ class GameServer:
             self.server.close()
             print("Server shut down complete")
 
+    def game_over(self):
+        if self.winner is not None:
+            message = json.dumps({"type": "WINNER", "color": self.winner.color}).encode()
+            length_message = len(message).to_bytes(4, byteorder="big")
+            with self.lock:
+                for player in self.sprite_groups["players"]:
+                    try:
+                        player.conn.sendall(length_message + message)
+                    except:
+                        print(f"Failed to send to {player.addr}")
+                        player.conn.close()
+                        self.sprite_groups["players"].remove(player)
+        
+
     def game_loop(self):
         """Main game loop running at 60 FPS"""
         while self.running:
             # Update all players
             with self.lock:
                 for player in self.sprite_groups["players"]:
-                    player.update(self.sprite_groups)
+                    reached_goal = player.update(self.sprite_groups)
+                    if reached_goal:
+                        self.winner = player
+                        self.running = False
 
                 for tile in self.sprite_groups["platform"]:
                     changed = tile.update(self.sprite_groups["players"])
@@ -275,8 +308,12 @@ class GameServer:
             # Clear changed tiles
             self.changed_tiles = []
 
+            self.game_over()
+
             # Maintain 60 FPS
             self.clock.tick(constants.FPS)
+        
+        server.stop()
 
 
 if __name__ == "__main__":

@@ -232,7 +232,11 @@ class GameClient:
                         self.running = False
                         break
 
-                    if update_data["type"] == "STATE":
+                    elif update_data["type"] == "WINNER":
+                        print(f"Player {update_data['color']} has won!")
+                        self.running = False
+                        break
+                    elif update_data["type"] == "STATE":
                         # Update player locations
                         player_data = update_data["players"]
 
