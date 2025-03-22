@@ -184,6 +184,7 @@ class GameClient:
         # Mouse Drag Jumping
         if mouse_pressed[0] and not me.in_air and not me.dragging:
             me.dragging = True
+            me.preserve_drag_state = True  
             me.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
 
         if me.dragging and not me.in_air:
@@ -199,6 +200,7 @@ class GameClient:
 
             if not mouse_pressed[0]:
                 me.dragging = False
+                me.preserve_drag_state = False  # Disable preserving drag state
                 # Send jump message with drag vector
                 message = json.dumps(
                     {
@@ -255,10 +257,10 @@ class GameClient:
                                 else:
                                     self.create_player(color, x, y, in_air)
 
-                            # Remove players that have disconnected
-                            for color in current_player_colors - updated_player_colors:
-                                with self.lock:
-                                    del self.player_dict[color]
+                        # Remove players that have disconnected
+                        for color in current_player_colors - updated_player_colors:
+                            with self.lock:
+                                del self.player_dict[color]
 
                         # TO DO WHEN TILES UPDATE
                         # map_data = update_data["map"]
