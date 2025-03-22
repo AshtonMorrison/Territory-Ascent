@@ -1,5 +1,4 @@
 import pygame
-import os
 from shared import constants
 
 
@@ -9,6 +8,7 @@ class Tile(pygame.sprite.Sprite):
 
         self.width = width
         self.height = height
+
         self.image = pygame.Surface([self.width, self.height])
 
         if image_integer == 1:
@@ -49,5 +49,5 @@ class Tile(pygame.sprite.Sprite):
         self.rect.topleft = (x, y)
 
     def update(self, color):
-
+        
         pygame.draw.rect(self.image, color, [0, self.height // 2, self.width, self.height // 2])

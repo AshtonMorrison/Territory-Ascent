@@ -9,8 +9,8 @@ from .tilemaps import sample_tile_map
 
 
 class GameServer:
-    def __init__(self, host="0.0.0.0"):
-        self.host = host
+    def __init__(self):
+        self.host = constants.HOST
         self.port = constants.PORT
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.running = True

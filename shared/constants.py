@@ -1,6 +1,6 @@
 # Network settings
 PORT = 5555
-HOST = "localhost" # Will change later when server side gets made
+HOST = "0.0.0.0"
 
 # Game settings
 SCREEN_WIDTH = 640 

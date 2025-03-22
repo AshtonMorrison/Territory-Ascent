@@ -12,11 +12,14 @@ class GameClient:
     def __init__(self):
         pygame.init()
 
-        # Display
-        self.screen = pygame.display.set_mode(
-            (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT)
-        )
-        pygame.display.set_caption("371 Multiplayer Game")
+        # Logical resolution
+        self.scaled_surface = pygame.Surface((constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT))
+        self.window_size = (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT)
+        self.fullscreen = False
+        
+        # Create initial screen
+        self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
+        pygame.display.set_caption("Multiplayer Platformer")
 
         # Clock for FPS
         self.clock = pygame.time.Clock()
@@ -36,11 +39,11 @@ class GameClient:
 
         self.running = False
 
-    def receive_message(self, sock):
+    def receive_message(self, conn):
         # First, receive the 4-byte header that contains the length
         length_data = b""
         while len(length_data) < 4:
-            chunk = sock.recv(4 - len(length_data))
+            chunk = conn.recv(4 - len(length_data))
             if not chunk:
                 raise Exception("Error: Connection lost while receiving length header.")
             length_data += chunk
@@ -51,12 +54,26 @@ class GameClient:
         # Now, receive the actual message of the specified length
         message_data = b""
         while len(message_data) < message_length:
-            chunk = sock.recv(message_length - len(message_data))
+            chunk = conn.recv(message_length - len(message_data))
             if not chunk:
                 raise Exception("Error: Connection lost while receiving message.")
             message_data += chunk
 
         return message_data
+    
+    def send_message(self, conn, message):
+        message = json.dumps(message).encode()
+        length_message = len(message).to_bytes(4, byteorder="big")
+        conn.sendall(length_message + message)
+
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        if self.fullscreen:
+            self.window_size = pygame.display.get_desktop_sizes()[0]
+            self.screen = pygame.display.set_mode(self.window_size, pygame.FULLSCREEN)
+        else:
+            self.window_size = (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT)
+            self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
 
     def connect(self):  # Used to connect to server and parse initial data from server
         try:
@@ -69,7 +86,7 @@ class GameClient:
             server_address = (
                 ip,
                 constants.PORT,
-            )  # Replace with your server's IP and port
+            )
             conn.connect(server_address)
             print(f"Connected to {server_address}")
 
@@ -123,9 +140,7 @@ class GameClient:
         try:
             with self.lock:
                 # Send disconnect message to server
-                message = json.dumps({"type": "DISCONNECT"}).encode()
-                length_message = len(message).to_bytes(4, byteorder="big")
-                conn.sendall(length_message + message)
+                self.send_message(conn, {"type": "DISCONNECT"})
 
                 # Receive confirmation from server
                 try:
@@ -168,17 +183,13 @@ class GameClient:
         keys = pygame.key.get_pressed()
         mouse_pressed = pygame.mouse.get_pressed()
         mouse_pos = pygame.mouse.get_pos()
-
+        
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
         if not me.dragging and not me.in_air:
             if keys[pygame.K_a] and not keys[pygame.K_d]:
-                message = json.dumps({"type": "MOVE", "direction": "left"}).encode()
-                length_message = len(message).to_bytes(4, byteorder="big")
-                conn.sendall(length_message + message)
+                self.send_message(conn, {"type": "MOVE", "direction": "left"})
             elif keys[pygame.K_d] and not keys[pygame.K_a]:
-                message = json.dumps({"type": "MOVE", "direction": "right"}).encode()
-                length_message = len(message).to_bytes(4, byteorder="big")
-                conn.sendall(length_message + message)
+                self.send_message(conn, {"type": "MOVE", "direction": "right"})
 
         # Mouse Drag Jumping
         if mouse_pressed[0] and not me.in_air and not me.dragging:
@@ -201,15 +212,7 @@ class GameClient:
                 me.dragging = False
                 me.preserve_drag_state = False  # Disable preserving drag state
                 # Send jump message with drag vector
-                message = json.dumps(
-                    {
-                        "type": "JUMP",
-                        "drag_x": me.drag_vector.x,
-                        "drag_y": me.drag_vector.y,
-                    }
-                ).encode()
-                length_message = len(message).to_bytes(4, byteorder="big")
-                conn.sendall(length_message + message)
+                self.send_message(conn, {"type": "JUMP", "drag_x": me.drag_vector.x,"drag_y": me.drag_vector.y})
 
     def update(
         self, conn
@@ -284,29 +287,30 @@ class GameClient:
         finally:
             self.running = False
 
+
     def draw(self):
-        # Make background white
-        self.screen.fill((255, 255, 255))
+        # Render everything onto the internal surface
+        self.scaled_surface.fill((255, 255, 255))
 
         # Draw tiles
         for t in self.tile_dict.values():
-            self.screen.blit(t.image, t.rect)
-
+            self.scaled_surface.blit(t.image, t.rect)
+        
         # Draw players
         for p in self.player_dict.values():
-            self.screen.blit(p.image, p.rect)
-
+            self.scaled_surface.blit(p.image, p.rect)
+        
         # Draw drag vector if dragging
-        if self.player_dict[self.me].dragging:
+        if self.me and self.player_dict[self.me].dragging:
             start_pos = self.player_dict[self.me].rect.center
-            end_pos = start_pos + self.player_dict[self.me].drag_vector
-            pygame.draw.line(self.screen, (0, 0, 255), start_pos, end_pos, 3)
+            end_pos = (start_pos[0] + self.player_dict[self.me].drag_vector[0], 
+                       start_pos[1] + self.player_dict[self.me].drag_vector[1])
+            pygame.draw.line(self.scaled_surface, (0, 0, 255), start_pos, end_pos, 3)
 
             # Draw arrowhead
             angle = math.atan2(start_pos[1] - end_pos[1], start_pos[0] - end_pos[0])
             arrow_length = 12
             arrow_angle = math.pi / 4
-
             left_arrow = (
                 end_pos[0] + arrow_length * math.cos(angle + arrow_angle),
                 end_pos[1] + arrow_length * math.sin(angle + arrow_angle),
@@ -316,8 +320,14 @@ class GameClient:
                 end_pos[1] + arrow_length * math.sin(angle - arrow_angle),
             )
 
-            pygame.draw.line(self.screen, (0, 0, 255), end_pos, left_arrow, 3)
-            pygame.draw.line(self.screen, (0, 0, 255), end_pos, right_arrow, 3)
+            pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, left_arrow, 3)
+            pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, right_arrow, 3)
+        
+        # Scale the internal surface to fit the window
+        scaled_surface = pygame.transform.smoothscale(self.scaled_surface, self.window_size)
+        self.screen.blit(scaled_surface, (0, 0))
+
+        pygame.display.flip()  # Update screen
 
     def run(self):  # RUNS ON MAIN THREAD
         
@@ -339,6 +349,12 @@ class GameClient:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+                elif event.type == pygame.VIDEORESIZE:
+                    if not self.fullscreen:  # Adjust only in windowed mode
+                        self.window_size = (event.w, event.h)
+                        self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                    self.toggle_fullscreen()
 
             # Everything gets done to the back buffer
             # Input handling
@@ -349,9 +365,6 @@ class GameClient:
 
             # FPS Limit
             self.clock.tick(constants.FPS)
-
-            # Flip the back buffer to the front
-            pygame.display.flip()
 
         update_thread.join()
         self.disconnect(self.conn)
