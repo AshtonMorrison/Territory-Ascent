@@ -54,7 +54,7 @@ class Tile(pygame.sprite.Sprite):
         # Check if the occupying player is still colliding with the tile
 
             # Create a slightly larger rect for collision detection
-            larger_rect = self.rect.inflate(2, 2)
+            larger_rect = self.rect.inflate(0, 2)
             larger_rect.center = self.rect.center
 
             # Check if the player is still colliding with the tile
