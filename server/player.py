@@ -16,7 +16,7 @@ class Player(pygame.sprite.Sprite):
         self.position = pygame.math.Vector2(x, y)
 
         # Movement
-        self.speed = 5 * constants.Y_GRAVITY
+        self.speed = 3 * constants.Y_GRAVITY
         self.velocity = pygame.math.Vector2(0, 0)
         self.acceleration = pygame.math.Vector2(0, 0) # To be used for Jumping and Gravity only
 

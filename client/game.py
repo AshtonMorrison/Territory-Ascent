@@ -207,7 +207,7 @@ class GameClient:
             )  # Vector from start to end
 
             # Limit the drag vector length to prevent excessive speeds
-            max_drag_length = 200  # Adjust as needed
+            max_drag_length = 125  # Adjust as needed
             if me.drag_vector.length() > max_drag_length:
                 me.drag_vector = me.drag_vector.normalize() * max_drag_length
 
