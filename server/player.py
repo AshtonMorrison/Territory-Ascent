@@ -16,13 +16,13 @@ class Player(pygame.sprite.Sprite):
         self.position = pygame.math.Vector2(x, y)
 
         # Movement
-        self.speed = 5
+        self.speed = 5 * constants.Y_GRAVITY
         self.velocity = pygame.math.Vector2(0, 0)
         self.acceleration = pygame.math.Vector2(0, 0) # To be used for Jumping and Gravity only
 
         # Jumping
         self.in_air = False
-        self.max_fall_speed = 10
+        self.max_fall_speed = 10 
 
         # Server side stuff
         self.conn = None
@@ -54,7 +54,7 @@ class Player(pygame.sprite.Sprite):
         self.jump = None
 
         # Apply acceleration to velocity
-        self.velocity += self.acceleration
+        self.velocity += self.acceleration * constants.Y_GRAVITY
       
         # Predict next position
         next_position = self.position + self.velocity + 0.5 * self.acceleration
