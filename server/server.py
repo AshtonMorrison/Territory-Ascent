@@ -1,5 +1,5 @@
 import socket
-import json
+import msgpack
 import threading
 import pygame
 from shared import constants
@@ -116,43 +116,44 @@ class GameServer:
             message_data += chunk
 
         return message_data
+    
+    def send_message(self, conn, message):
+        message_pack = msgpack.packb(message)
+        length_message = len(message_pack).to_bytes(4, byteorder="big")
+        conn.sendall(length_message + message_pack)
 
     def handle_client(self, conn, addr):
         print(f"New connection: {addr}")
         color = self.get_color()
         if color == "Error: No more colors available":
-            conn.sendall(json.dumps("Error: No more colors available").encode())
+            self.send_message(conn, "Error: No more colors available")
             conn.close()
             return
+        
         player = Player(color, 100, 100, self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
         self.sprite_groups["players"].add(player)
 
         # Send initial information (tile map, player location, tile state, etc)
-        message = json.dumps(
+        self.send_message(conn,
             {
                 "type": "INITIAL",
                 "TileMap": self.tile_data,
                 "Players": self.get_player_state(),
                 "YourPlayer": color,
-            }
-        ).encode()
-        length_message = len(message).to_bytes(4, byteorder="big")
-        conn.sendall(length_message + message)
+            })
 
         try:
             while self.running:
                 try:
                     try:
-                        data = self.receive_message(conn).decode()
-                        player_data = json.loads(data)
+                        data = self.receive_message(conn)
+                        player_data = msgpack.unpackb(data)
 
                         # Handle disconnect input
                         if player_data["type"] == "DISCONNECT":
-                            message = "DISCONNECTED".encode()
-                            length_message = len(message).to_bytes(4, byteorder="big")
-                            conn.sendall(length_message + message)
+                            self.send_message(conn, "DISCONNECTED")
                             break
 
                         # Handle movement input
@@ -208,7 +209,7 @@ class GameServer:
             "tiles": self.changed_tiles
         }
 
-        message = json.dumps(game_state).encode()
+        message = msgpack.packb(game_state)
         length_message = len(message).to_bytes(4, byteorder="big")
 
         with self.lock:
@@ -231,10 +232,11 @@ class GameServer:
             pass
 
         # Clean up
+        message = msgpack.packb({"type": "SHUTTING DOWN"})
+        length_message = len(message).to_bytes(4, byteorder="big")
+
         for player in self.sprite_groups["players"]:
             try:
-                message = json.dumps({"type": "SHUTTING DOWN"}).encode()
-                length_message = len(message).to_bytes(4, byteorder="big")
                 player.conn.sendall(length_message + message)
                 player.conn.close()
             except:
@@ -272,7 +274,7 @@ class GameServer:
 
     def game_over(self):
         if self.winner is not None:
-            message = json.dumps({"type": "WINNER", "color": self.winner.color}).encode()
+            message = msgpack.packb({"type": "WINNER", "color": self.winner.color})
             length_message = len(message).to_bytes(4, byteorder="big")
             with self.lock:
                 for player in self.sprite_groups["players"]:

@@ -5,7 +5,7 @@ from .player import Player
 import math
 import socket
 import threading
-import json
+import msgpack
 
 
 class GameClient:
@@ -62,9 +62,9 @@ class GameClient:
         return message_data
     
     def send_message(self, conn, message):
-        message = json.dumps(message).encode()
-        length_message = len(message).to_bytes(4, byteorder="big")
-        conn.sendall(length_message + message)
+        message_pack = msgpack.packb(message)
+        length_message = len(message_pack).to_bytes(4, byteorder="big")
+        conn.sendall(length_message + message_pack)
 
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
@@ -92,20 +92,21 @@ class GameClient:
 
             # Receive initial data
             try:
-                data = self.receive_message(conn).decode()
+                data = self.receive_message(conn)
             except Exception as e:
                 conn.close()
                 return None, str(e)
-
-            print(data)
-
-            initial_data = json.loads(data)
+            
+            try:
+                initial_data = msgpack.unpackb(data)
+            except msgpack.UnpackException as e:
+                return None, str(e)
 
             # Check for error message
             if initial_data == "Error: No more colors available":
                 e = "Error: Server full, No more player slots available"
                 conn.close()
-                return None, e
+                return None, str(e)
 
             # Parse initial data
             if initial_data["type"] == "INITIAL":
@@ -129,12 +130,12 @@ class GameClient:
             else:
                 e = "Error: Invalid initial data received from server"
                 self.disconnect(conn)
-                return None, e
+                return None, str(e)
 
             return conn, None  # Return the connection object and no error
 
         except socket.error as e:
-            return None, e
+            return None, str(e)
 
     def disconnect(self, conn):  # Used to gracefully disconnect from server
         try:
@@ -144,7 +145,7 @@ class GameClient:
 
                 # Receive confirmation from server
                 try:
-                    response = self.receive_message(conn).decode()
+                    response = self.receive_message(conn)
                     if response == "DISCONNECTED":
                         print("Successfully disconnected from server")
                     else:
@@ -220,14 +221,14 @@ class GameClient:
         try:
             while self.running:
                 try:
-                    data = self.receive_message(conn).decode()
+                    data = self.receive_message(conn)
 
                     try:
-                        update_data = json.loads(data)
-                    except json.JSONDecodeError as e:
-                        print(f"JSON decode error: {e}")
-                        print(f"Received data: {data}")
-                        continue
+                        update_data = msgpack.unpackb(data)
+                    except msgpack.UnpackException as e:
+                        print(f"MessagePack Unpack error: {e}")
+                        self.running = False
+                        break
 
                     # Parse update data
                     if update_data["type"] == "SHUTTING DOWN":
