@@ -13,10 +13,12 @@ class GameClient:
         pygame.init()
 
         # Logical resolution
-        self.scaled_surface = pygame.Surface((constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT))
+        self.scaled_surface = pygame.Surface(
+            (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT)
+        )
         self.window_size = (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT)
         self.fullscreen = False
-        
+
         # Create initial screen
         self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
         pygame.display.set_caption("Multiplayer Platformer")
@@ -60,7 +62,7 @@ class GameClient:
             message_data += chunk
 
         return message_data
-    
+
     def send_message(self, conn, message):
         message_pack = msgpack.packb(message)
         length_message = len(message_pack).to_bytes(4, byteorder="big")
@@ -96,7 +98,7 @@ class GameClient:
             except Exception as e:
                 conn.close()
                 return None, str(e)
-            
+
             try:
                 initial_data = msgpack.unpackb(data)
             except msgpack.UnpackException as e:
@@ -184,7 +186,7 @@ class GameClient:
         keys = pygame.key.get_pressed()
         mouse_pressed = pygame.mouse.get_pressed()
         mouse_pos = pygame.mouse.get_pos()
-        
+
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
         if not me.dragging and not me.in_air:
             if keys[pygame.K_a] and not keys[pygame.K_d]:
@@ -195,7 +197,7 @@ class GameClient:
         # Mouse Drag Jumping
         if mouse_pressed[0] and not me.in_air and not me.dragging:
             me.dragging = True
-            me.preserve_drag_state = True  
+            me.preserve_drag_state = True
             me.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
 
         if me.dragging and not me.in_air:
@@ -213,7 +215,14 @@ class GameClient:
                 me.dragging = False
                 me.preserve_drag_state = False  # Disable preserving drag state
                 # Send jump message with drag vector
-                self.send_message(conn, {"type": "JUMP", "drag_x": me.drag_vector.x,"drag_y": me.drag_vector.y})
+                self.send_message(
+                    conn,
+                    {
+                        "type": "JUMP",
+                        "drag_x": me.drag_vector.x,
+                        "drag_y": me.drag_vector.y,
+                    },
+                )
 
     def update(
         self, conn
@@ -269,7 +278,6 @@ class GameClient:
                             with self.lock:
                                 del self.player_dict[color]
 
-
                         # Update tile colors
                         tile_data = update_data["tiles"]
                         for tile_info in tile_data:
@@ -277,7 +285,7 @@ class GameClient:
                             y = tile_info["y"]
                             color = tile_info["color"]
                             self.tile_dict[(x, y)].update(color)
-                            
+
                 except Exception as e:
                     print(f"Error receiving message: {e}")
                     self.running = False
@@ -288,7 +296,6 @@ class GameClient:
         finally:
             self.running = False
 
-
     def draw(self):
         # Render everything onto the internal surface
         self.scaled_surface.fill((255, 255, 255))
@@ -296,16 +303,18 @@ class GameClient:
         # Draw tiles
         for t in self.tile_dict.values():
             self.scaled_surface.blit(t.image, t.rect)
-        
+
         # Draw players
         for p in self.player_dict.values():
             self.scaled_surface.blit(p.image, p.rect)
-        
+
         # Draw drag vector if dragging
         if self.me and self.player_dict[self.me].dragging:
             start_pos = self.player_dict[self.me].rect.center
-            end_pos = (start_pos[0] + self.player_dict[self.me].drag_vector[0], 
-                       start_pos[1] + self.player_dict[self.me].drag_vector[1])
+            end_pos = (
+                start_pos[0] + self.player_dict[self.me].drag_vector[0],
+                start_pos[1] + self.player_dict[self.me].drag_vector[1],
+            )
             pygame.draw.line(self.scaled_surface, (0, 0, 255), start_pos, end_pos, 3)
 
             # Draw arrowhead
@@ -323,15 +332,15 @@ class GameClient:
 
             pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, left_arrow, 3)
             pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, right_arrow, 3)
-        
-        # Scale the internal surface to fit the window
-        scaled_surface = pygame.transform.smoothscale(self.scaled_surface, self.window_size)
+
+        # Scale the internal surface to fit the window using nearest-neighbor scaling
+        scaled_surface = pygame.transform.scale(self.scaled_surface, self.window_size)
         self.screen.blit(scaled_surface, (0, 0))
 
         pygame.display.flip()  # Update screen
 
     def run(self):  # RUNS ON MAIN THREAD
-        
+
         self.conn, e = self.connect()
 
         if self.conn is None:
@@ -353,7 +362,9 @@ class GameClient:
                 elif event.type == pygame.VIDEORESIZE:
                     if not self.fullscreen:  # Adjust only in windowed mode
                         self.window_size = (event.w, event.h)
-                        self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
+                        self.screen = pygame.display.set_mode(
+                            self.window_size, pygame.RESIZABLE
+                        )
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
                     self.toggle_fullscreen()
 
@@ -379,4 +390,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         client.disconnect(client.conn)
         pygame.quit()
-
