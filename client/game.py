@@ -6,6 +6,21 @@ import math
 import socket
 import threading
 import msgpack
+import base64
+
+
+def decode_ip(encoded):
+    padded = encoded + "=" * (4 - len(encoded) % 4)  # Fix padding
+    return socket.inet_ntoa(base64.urlsafe_b64decode(padded))
+
+
+def is_valid_ip(ip):
+    try:
+        # Try to convert the IP string to its packed binary form using inet_aton
+        socket.inet_aton(ip)
+        return True  # Valid IP
+    except socket.error:
+        return False  # Invalid IP
 
 
 class GameClient:
@@ -79,8 +94,15 @@ class GameClient:
 
     def connect(self):  # Used to connect to server and parse initial data from server
         try:
-            ip = input("Enter the server IP: ")
-
+            code = input("Enter the game code or IP address: ")
+            if len(code) > 6:
+                ip = code
+            else:
+                ip = decode_ip(code)
+                if not is_valid_ip(ip):
+                    print("Invalid Code")
+                    raise ValueError("Game Code not valid")
+            print(f"will attempt to connect to server at {ip}")
             # Create a socket
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -89,9 +111,13 @@ class GameClient:
                 ip,
                 constants.PORT,
             )
-            conn.connect(server_address)
-            print(f"Connected to {server_address}")
 
+            try:
+                conn.connect(server_address)
+                print(f"Connected to {server_address}")
+            except Exception as e:
+                print("connection failed: check IP address, or game code")
+                return None, "Failed to connect\n" + str(e)
             # Receive initial data
             try:
                 data = self.receive_message(conn)
