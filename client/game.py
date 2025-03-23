@@ -276,6 +276,7 @@ class GameClient:
                             x = tile_info["x"]
                             y = tile_info["y"]
                             color = tile_info["color"]
+                            print(color)
                             self.tile_dict[(x, y)].update(color)
                             
                 except Exception as e:
