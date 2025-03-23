@@ -7,6 +7,20 @@ from .tile import Tile
 from .player import Player
 from .tilemaps import sample_tile_map
 
+# for encoding IP
+import base64
+
+
+def get_ipv4():
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+
+
+def encode_ip(ip):
+    packed_ip = socket.inet_aton(ip)
+    return base64.urlsafe_b64encode(packed_ip).decode().rstrip("=")
+
 
 class GameServer:
     def __init__(self):
@@ -82,7 +96,7 @@ class GameServer:
                         self.sprite_groups["platform"],
                     )
                     self.tile_data.append({"x": x, "y": y, "type": 2})
-                
+
                 # Goal
                 elif self.tile_map[row][col] == 3:
                     Tile(
@@ -116,7 +130,7 @@ class GameServer:
             message_data += chunk
 
         return message_data
-    
+
     def send_message(self, conn, message):
         message_pack = msgpack.packb(message)
         length_message = len(message_pack).to_bytes(4, byteorder="big")
@@ -129,20 +143,22 @@ class GameServer:
             self.send_message(conn, "Error: No more colors available")
             conn.close()
             return
-        
+
         player = Player(color, 100, 100, self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
         self.sprite_groups["players"].add(player)
 
         # Send initial information (tile map, player location, tile state, etc)
-        self.send_message(conn,
+        self.send_message(
+            conn,
             {
                 "type": "INITIAL",
                 "TileMap": self.tile_data,
                 "Players": self.get_player_state(),
                 "YourPlayer": color,
-            })
+            },
+        )
 
         try:
             while self.running:
@@ -206,7 +222,7 @@ class GameServer:
         game_state = {
             "type": "STATE",
             "players": self.get_player_state(),
-            "tiles": self.changed_tiles
+            "tiles": self.changed_tiles,
         }
 
         message = msgpack.packb(game_state)
@@ -246,7 +262,8 @@ class GameServer:
         self.server.bind((self.host, self.port))
         self.server.listen()
         print(f"Server listening on {self.host}:{self.port}")
-        print(f"IP address of server is: {socket.gethostbyname(socket.gethostname())}")
+        print(f"IP address of server is: {get_ipv4()}")
+        print(f"the code is: {encode_ip(get_ipv4())}")
 
         # Start game loop thread
         game_thread = threading.Thread(target=self.game_loop)
@@ -284,7 +301,6 @@ class GameServer:
                         print(f"Failed to send to {player.addr}")
                         player.conn.close()
                         self.sprite_groups["players"].remove(player)
-        
 
     def game_loop(self):
         """Main game loop running at 60 FPS"""
@@ -314,7 +330,7 @@ class GameServer:
 
             # Maintain 60 FPS
             self.clock.tick(constants.FPS)
-        
+
         server.stop()
 
 
