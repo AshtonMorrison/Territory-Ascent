@@ -24,8 +24,9 @@ def is_valid_ip(ip):
 
 
 class GameClient:
-    def __init__(self):
+    def __init__(self, game_code=None):
         pygame.init()
+        self.game_code = game_code
 
         # Logical resolution
         self.scaled_surface = pygame.Surface(
@@ -94,7 +95,11 @@ class GameClient:
 
     def connect(self):  # Used to connect to server and parse initial data from server
         try:
-            code = input("Enter the game code or IP address: ")
+            if self.game_code is None:
+                code = input("Enter the game code or IP address: ")
+            else:
+                code = self.game_code
+
             if len(code) > 6:
                 ip = code
             else:
@@ -410,7 +415,10 @@ class GameClient:
 
 
 if __name__ == "__main__":
-    client = GameClient()
+    import sys
+
+    game_code = sys.argv[1] if len(sys.argv) > 1 else None
+    client = GameClient(game_code)
     try:
         client.run()
     except KeyboardInterrupt:
