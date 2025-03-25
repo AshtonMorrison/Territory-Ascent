@@ -1,7 +1,5 @@
 import pygame
 from shared import constants
-import math
-import os
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, color, x, y, width, height):
@@ -18,16 +16,18 @@ class Player(pygame.sprite.Sprite):
         self.position = pygame.math.Vector2(x, y)
 
         # Movement
-        self.speed = 5
+        self.speed = 3 * constants.Y_GRAVITY
         self.velocity = pygame.math.Vector2(0, 0)
         self.acceleration = pygame.math.Vector2(0, 0) # To be used for Jumping and Gravity only
 
         # Jumping
         self.in_air = False
-        self.max_fall_speed = 10
+        self.max_fall_speed = 10 
 
         # Server side stuff
         self.conn = None
+        self.addr = None
+        
         # POTENTIALLY ADD TAGS FOR MOVEMENT TO GO FROM CLIENT HANDLE TO GAME LOOP UPDATE
         self.direction = None
         self.jump = False
@@ -54,7 +54,7 @@ class Player(pygame.sprite.Sprite):
         self.jump = None
 
         # Apply acceleration to velocity
-        self.velocity += self.acceleration
+        self.velocity += self.acceleration * constants.Y_GRAVITY
       
         # Predict next position
         next_position = self.position + self.velocity + 0.5 * self.acceleration
@@ -66,7 +66,10 @@ class Player(pygame.sprite.Sprite):
         # Collision detection for next position
         touched_ground = pygame.sprite.spritecollide(self, tile_groups["ground"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
         touched_platform = pygame.sprite.spritecollide(self, tile_groups["platform"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
+        touched_goal = pygame.sprite.spritecollide(self, tile_groups["goal"], False, collided = lambda sprite, tile: next_rect.colliderect(tile.rect))
 
+        if touched_goal:
+            return True
         if not touched_ground and not touched_platform:
             self.in_air = True
 
@@ -79,6 +82,19 @@ class Player(pygame.sprite.Sprite):
 
         # Platform Collision
         if touched_platform:
+
+            # Check for occupied platforms
+            for tile in touched_platform:
+                if tile.occupied_by is not None and tile.occupied_by != self.color:
+                    # RESET POSITION
+                    next_position = pygame.math.Vector2(320, 100) # TEMPORARY LOCATION
+                    self.velocity.x = 0
+                    self.acceleration.x = 0
+
+                else:
+                    if self.velocity.y > 0 and next_rect.bottom > tile.rect.top and self.rect.bottom < tile.rect.top + 1: # Make sure player is on top of platform
+                        tile.occupied_by = self.color
+
             tile = touched_platform[0]
 
             # Horizontal Collision
@@ -121,10 +137,4 @@ class Player(pygame.sprite.Sprite):
         self.position = next_position
         self.rect.bottomleft = self.position
 
-    @staticmethod
-    def _load_and_scale_image(path, width, height):
-        try:
-            image = pygame.image.load(os.path.join("client", path))
-            return pygame.transform.scale(image, (width, height))
-        except (pygame.error, FileNotFoundError):
-            return None
+        return False

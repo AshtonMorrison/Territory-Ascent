@@ -1,7 +1,4 @@
 import pygame
-from shared import constants
-import math
-import os
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, color, x, y, width, height, in_air):
@@ -21,20 +18,27 @@ class Player(pygame.sprite.Sprite):
         self.drag_start_pos = None
         self.drag_vector = pygame.math.Vector2(0, 0)
         self.in_air = in_air
-        
+        self.preserve_drag_state = ( False )
 
     def update(self, x, y, in_air):
-        
+
+        # Save drag state if needed
+        drag_info = None
+        if self.preserve_drag_state and self.dragging:
+            drag_info = {
+                "dragging": self.dragging,
+                "drag_start_pos": self.drag_start_pos,
+                "drag_vector": self.drag_vector,
+            }
+
         # Update rect position
-        self.rect.bottomleft = (x ,y)
-    
+        self.rect.bottomleft = (x, y)
+
         # Update in_air status
         self.in_air = in_air
 
-    @staticmethod
-    def _load_and_scale_image(path, width, height):
-        try:
-            image = pygame.image.load(os.path.join("client", path))
-            return pygame.transform.scale(image, (width, height))
-        except (pygame.error, FileNotFoundError):
-            return None
+        # Restore drag state if needed
+        if drag_info:
+            self.dragging = drag_info["dragging"]
+            self.drag_start_pos = drag_info["drag_start_pos"]
+            self.drag_vector = drag_info["drag_vector"]

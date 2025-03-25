@@ -1,11 +1,11 @@
 # Network settings
-PORT = 5556
-HOST = "localhost" # Will change later when server side gets made
+PORT = 5555
+HOST = "0.0.0.0"
 
 # Game settings
-SCREEN_WIDTH = 640 
+SCREEN_WIDTH = 640
 SCREEN_HEIGHT = 360
-FPS = 60
+FPS = 45
 
 # Tile settings
 TILE_SIZE = 16
@@ -14,4 +14,4 @@ GRID_HEIGHT = -(SCREEN_HEIGHT // -TILE_SIZE)
 DEFAULT_PLATFORM_COLOR = (120, 120, 120)
 
 # World Settings
-Y_GRAVITY = 1
+Y_GRAVITY = 60 / FPS 
