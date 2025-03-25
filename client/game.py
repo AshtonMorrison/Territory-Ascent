@@ -117,6 +117,7 @@ class GameClient:
                 constants.PORT,
             )
 
+
             try:
                 conn.connect(server_address)
                 print(f"Connected to {server_address}")
