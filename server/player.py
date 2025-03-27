@@ -148,15 +148,15 @@ class Player(pygame.sprite.Sprite):
 
 
         # Screen Border Collision
-        if next_rect.left < 0: # Left
+        if next_position.x < 0: # Left
             next_position.x = 0
             self.velocity.x = 0
             self.acceleration.x = 0
-        elif next_rect.right > constants.SCREEN_WIDTH: # Right
+        elif next_position.x + self.rect.width > constants.SCREEN_WIDTH: # Right
             next_position.x = constants.SCREEN_WIDTH - self.rect.width
             self.velocity.x = 0
             self.acceleration.x = 0
-        elif next_rect.top < 0: # Top
+        elif next_position.y < 0: # Top
             next_position.y = 0
             self.velocity.y = 0
             self.acceleration.y = 0
