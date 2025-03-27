@@ -296,6 +296,9 @@ class GameClient:
                         # Reset Players
                         player_data = update_data["Players"]
 
+                        # Reset countdown
+                        self.countdown = 999
+
                         current_player_colors = set()
                         with self.lock:
                             current_player_colors = set(self.player_dict.keys())

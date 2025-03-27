@@ -167,6 +167,7 @@ class GameServer:
             "YourPlayer": player.color,
         }
         self.send_message(conn, initial_state)
+        self.countdown()
 
         try:
             while self.running:
@@ -347,7 +348,7 @@ class GameServer:
     def countdown(self):
         """Performs a countdown before starting the game."""
 
-        for countdown_val in range(3, -1, -1):
+        for countdown_val in range(5, -1, -1):
             message = msgpack.packb({"type": "COUNTDOWN", "countdown": countdown_val})
             length_message = len(message).to_bytes(4, byteorder="big")
             with self.lock:
@@ -406,7 +407,7 @@ class GameServer:
                         self.sprite_groups["players"].remove(player)
 
             self.reset_game()
-            
+
             pygame.time.wait(3000)
             self.countdown()
 
