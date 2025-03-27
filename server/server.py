@@ -344,7 +344,53 @@ class GameServer:
                     else:
                         self.sprite_groups["waiting-players"].remove(player)
 
+    def countdown(self):
+        """Performs a countdown before starting the game."""
 
+        for countdown_val in range(3, -1, -1):
+            message = msgpack.packb({"type": "COUNTDOWN", "countdown": countdown_val})
+            length_message = len(message).to_bytes(4, byteorder="big")
+            with self.lock:
+                for player in self.sprite_groups["players"]:
+                    try:
+                        player.conn.sendall(length_message + message)
+                    except:
+                        print(f"Failed to send to {player.addr}")
+                        player.conn.close()
+                        self.sprite_groups["players"].remove(player)
+
+            # Process updates for 1 second while waiting for countdown
+            start_time = pygame.time.get_ticks()
+            while pygame.time.get_ticks() - start_time < 1000:
+                # Update all players even during countdown
+                with self.lock:
+                    for player in self.sprite_groups["players"]:
+                        # Don't check for goal during countdown
+                        player.update(
+                            self.sprite_groups,
+                            self.current_map["spawn"],
+                            check_goal=False,
+                        )
+
+                    for tile in self.sprite_groups["platform"]:
+                        changed = tile.update(self.sprite_groups["players"])
+                        if changed:
+                            self.changed_tiles.append(
+                                {
+                                    "x": tile.rect.x,
+                                    "y": tile.rect.y,
+                                    "color": tile.color,
+                                }
+                            )
+
+                # Broadcast state
+                self.broadcast()
+
+                # Clear changed tiles
+                self.changed_tiles = []
+
+                # Small delay to prevent CPU hogging
+                pygame.time.wait(10)
 
     def game_over(self):
         if self.winner is not None:
@@ -360,7 +406,8 @@ class GameServer:
                         self.sprite_groups["players"].remove(player)
 
             self.reset_game()
-
+            
+            pygame.time.wait(3000)
             self.countdown()
 
             self.game_running = True
@@ -374,52 +421,7 @@ class GameServer:
                 self.waiting = False
 
                 pygame.time.wait(3000)
-                for countdown_val in range(3, -1, -1):
-                    message = msgpack.packb(
-                        {"type": "COUNTDOWN", "countdown": countdown_val}
-                    )
-                    length_message = len(message).to_bytes(4, byteorder="big")
-                    with self.lock:
-                        for player in self.sprite_groups["players"]:
-                            try:
-                                player.conn.sendall(length_message + message)
-                            except:
-                                print(f"Failed to send to {player.addr}")
-                                player.conn.close()
-                                self.sprite_groups["players"].remove(player)
-
-                    # Process updates for 1 second while waiting for countdown
-                    start_time = pygame.time.get_ticks()
-                    while pygame.time.get_ticks() - start_time < 1000:
-                        # Update all players even during countdown
-                        with self.lock:
-                            for player in self.sprite_groups["players"]:
-                                # Don't check for goal during countdown
-                                player.update(
-                                    self.sprite_groups,
-                                    self.current_map["spawn"],
-                                    check_goal=False,
-                                )
-
-                            for tile in self.sprite_groups["platform"]:
-                                changed = tile.update(self.sprite_groups["players"])
-                                if changed:
-                                    self.changed_tiles.append(
-                                        {
-                                            "x": tile.rect.x,
-                                            "y": tile.rect.y,
-                                            "color": tile.color,
-                                        }
-                                    )
-
-                        # Broadcast state
-                        self.broadcast()
-
-                        # Clear changed tiles
-                        self.changed_tiles = []
-
-                        # Small delay to prevent CPU hogging
-                        pygame.time.wait(10)
+                self.countdown()
 
             while self.game_running:
                 # Update all players
