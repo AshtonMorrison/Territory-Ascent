@@ -57,6 +57,12 @@ class GameClient:
 
         self.running = False
 
+        self.countdown = 999
+        self.go_timer = 0
+
+        # Font for countdown
+        self.font = pygame.font.SysFont(None, 150)  
+
     def receive_message(self, conn):
         # First, receive the 4-byte header that contains the length
         length_data = b""
@@ -117,14 +123,13 @@ class GameClient:
                 constants.PORT,
             )
 
-
             try:
                 conn.connect(server_address)
                 print(f"Connected to {server_address}")
             except Exception as e:
                 print("connection failed: check IP address, or game code")
                 return None, "Failed to connect\n" + str(e)
-            
+
             # Receive initial data
             try:
                 data = self.receive_message(conn)
@@ -216,47 +221,51 @@ class GameClient:
     def handle_inputs(
         self, conn
     ):  # Used to handle inputs from user, must convert these inputs to messages to send to server
-        me = self.player_dict[self.me]
-        keys = pygame.key.get_pressed()
-        mouse_pressed = pygame.mouse.get_pressed()
-        mouse_pos = pygame.mouse.get_pos()
 
-        # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
-        if not me.dragging and not me.in_air:
-            if keys[pygame.K_a] and not keys[pygame.K_d]:
-                self.send_message(conn, {"type": "MOVE", "direction": "left"})
-            elif keys[pygame.K_d] and not keys[pygame.K_a]:
-                self.send_message(conn, {"type": "MOVE", "direction": "right"})
+        if self.countdown <= 0:
+            me = self.player_dict[self.me]
+            keys = pygame.key.get_pressed()
+            mouse_pressed = pygame.mouse.get_pressed()
+            mouse_pos = pygame.mouse.get_pos()
 
-        # Mouse Drag Jumping
-        if mouse_pressed[0] and not me.in_air and not me.dragging:
-            me.dragging = True
-            me.preserve_drag_state = True
-            me.drag_start_pos = pygame.math.Vector2(mouse_pos)  # Record start position
+            # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
+            if not me.dragging and not me.in_air:
+                if keys[pygame.K_a] and not keys[pygame.K_d]:
+                    self.send_message(conn, {"type": "MOVE", "direction": "left"})
+                elif keys[pygame.K_d] and not keys[pygame.K_a]:
+                    self.send_message(conn, {"type": "MOVE", "direction": "right"})
 
-        if me.dragging and not me.in_air:
-            drag_end_pos = pygame.math.Vector2(mouse_pos)
-            me.drag_vector = (
-                me.drag_start_pos - drag_end_pos
-            )  # Vector from start to end
+            # Mouse Drag Jumping
+            if mouse_pressed[0] and not me.in_air and not me.dragging:
+                me.dragging = True
+                me.preserve_drag_state = True
+                me.drag_start_pos = pygame.math.Vector2(
+                    mouse_pos
+                )  # Record start position
 
-            # Limit the drag vector length to prevent excessive speeds
-            max_drag_length = 125  # Adjust as needed
-            if me.drag_vector.length() > max_drag_length:
-                me.drag_vector = me.drag_vector.normalize() * max_drag_length
+            if me.dragging and not me.in_air:
+                drag_end_pos = pygame.math.Vector2(mouse_pos)
+                me.drag_vector = (
+                    me.drag_start_pos - drag_end_pos
+                )  # Vector from start to end
 
-            if not mouse_pressed[0]:
-                me.dragging = False
-                me.preserve_drag_state = False  # Disable preserving drag state
-                # Send jump message with drag vector
-                self.send_message(
-                    conn,
-                    {
-                        "type": "JUMP",
-                        "drag_x": me.drag_vector.x,
-                        "drag_y": me.drag_vector.y,
-                    },
-                )
+                # Limit the drag vector length to prevent excessive speeds
+                max_drag_length = 125  # Adjust as needed
+                if me.drag_vector.length() > max_drag_length:
+                    me.drag_vector = me.drag_vector.normalize() * max_drag_length
+
+                if not mouse_pressed[0]:
+                    me.dragging = False
+                    me.preserve_drag_state = False  # Disable preserving drag state
+                    # Send jump message with drag vector
+                    self.send_message(
+                        conn,
+                        {
+                            "type": "JUMP",
+                            "drag_x": me.drag_vector.x,
+                            "drag_y": me.drag_vector.y,
+                        },
+                    )
 
     def update(
         self, conn
@@ -286,6 +295,9 @@ class GameClient:
                     elif update_data["type"] == "NEW GAME":
                         # Reset Players
                         player_data = update_data["Players"]
+
+                        # Reset countdown
+                        self.countdown = 999
 
                         current_player_colors = set()
                         with self.lock:
@@ -352,6 +364,13 @@ class GameClient:
                             color = tile_info["color"]
                             self.tile_dict[(x, y)].update(color)
 
+                    elif update_data["type"] == "COUNTDOWN":
+                        self.countdown = update_data["countdown"]
+                        if self.countdown == 0:
+                            # Start the GO timer when countdown reaches zero
+                            self.go_timer = pygame.time.get_ticks()
+                        print(f"Game starting in {self.countdown} seconds")
+
                 except Exception as e:
                     print(f"Error receiving message: {e}")
                     self.running = False
@@ -398,6 +417,45 @@ class GameClient:
 
             pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, left_arrow, 3)
             pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, right_arrow, 3)
+
+        current_time = pygame.time.get_ticks()
+
+        # Draw countdown if active
+        if self.countdown > 0:
+            # Create a semi-transparent overlay
+            overlay = pygame.Surface(
+                (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT), pygame.SRCALPHA
+            )
+            overlay.fill((0, 0, 0, 128))
+            self.scaled_surface.blit(overlay, (0, 0))
+
+            # Render countdown text
+            countdown_text = self.font.render(
+                str(self.countdown if self.countdown != 999 else ""),
+                True,
+                (255, 255, 255),
+            )
+            text_rect = countdown_text.get_rect(
+                center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2)
+            )
+            self.scaled_surface.blit(countdown_text, text_rect)
+
+            ready_font = pygame.font.SysFont(None, 70)
+            ready_text = ready_font.render("Get Ready!", True, (255, 255, 255))
+            ready_rect = ready_text.get_rect(
+                center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 - 100)
+            )
+            self.scaled_surface.blit(ready_text, ready_rect)
+
+        elif self.countdown == 0 and self.go_timer > 0:
+            if current_time - self.go_timer < 1000:
+                go_text = self.font.render("GO!", True, (0, 151, 0))
+                go_rect = go_text.get_rect(
+                    center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2)
+                )
+                self.scaled_surface.blit(go_text, go_rect)
+            else:
+                self.go_timer = 0
 
         # Scale the internal surface to fit the window using nearest-neighbor scaling
         scaled_surface = pygame.transform.scale(self.scaled_surface, self.window_size)
