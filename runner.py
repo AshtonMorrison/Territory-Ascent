@@ -182,6 +182,8 @@ def main():
                 elif connect_button.rect.collidepoint(event.pos):
                     if text_input.text:
                         client_process = run_client(text_input.text)
+                    if server_code is not None:
+                        client_process = run_client(server_code)
 
                 elif instructions_button.rect.collidepoint(event.pos):
                     show_instructions = True

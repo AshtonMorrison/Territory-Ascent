@@ -2,10 +2,11 @@ import socket
 import msgpack
 import threading
 import pygame
+import random
 from shared import constants
 from .tile import Tile
 from .player import Player
-from .tilemaps import sample_tile_map
+from . import tilemaps
 
 # for encoding IP
 import base64
@@ -27,14 +28,15 @@ class GameServer:
         self.host = constants.HOST
         self.port = constants.PORT
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.running = True
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Enable SO_REUSEADDR
         self.server.settimeout(1.0)
 
         self.sprite_groups = {
             "ground": pygame.sprite.Group(),  # Used for Collision
             "platform": pygame.sprite.Group(),  # Used for Collision
             "goal": pygame.sprite.Group(),  # Used for Collision
-            "players": pygame.sprite.Group(),  # Used for Collision
+            "players": pygame.sprite.Group(),  # Used for Collision and Broadcasting
+            "waiting-players": pygame.sprite.Group(),  # Used for Waiting Room
         }
 
         self.lock = threading.Lock()
@@ -58,23 +60,29 @@ class GameServer:
         self.changed_tiles = []  # used for sending tile changes to clients
         self.tile_data = []  # used for initial sending of tile map to clients
 
-        # Tilemap layout (0: empty, 1: ground, 2: platform, 3: goal)
-        self.tile_map = sample_tile_map
-
-        self.create_tile_map()
+        self.waiting_map = tilemaps.waiting_room
+        self.game_maps = [tilemaps.game_1, tilemaps.game_2]
+        self.current_map = None
 
         # Game Logic
         self.winner = None
+        self.player_ready = {}  # Track which players are ready
 
-    def create_tile_map(self):
+        self.running = False # Game Loop
+        self.waiting = False # Waiting Room
+        self.game_running = False # Game Running
+
+
+
+    def create_tile_map(self, map):
         self.tile_data = []
-        for row in range(len(self.tile_map)):
-            for col in range(len(self.tile_map[row])):
+        for row in range(len(map)):
+            for col in range(len(map[row])):
                 x = col * self.tile_size
                 y = row * self.tile_size
 
                 # Ground
-                if self.tile_map[row][col] == 1:
+                if map[row][col] == 1:
                     Tile(
                         x,
                         y,
@@ -86,7 +94,7 @@ class GameServer:
                     self.tile_data.append({"x": x, "y": y, "type": 1})
 
                 # Platform
-                elif self.tile_map[row][col] == 2:
+                elif map[row][col] == 2:
                     Tile(
                         x,
                         y,
@@ -98,7 +106,7 @@ class GameServer:
                     self.tile_data.append({"x": x, "y": y, "type": 2})
 
                 # Goal
-                elif self.tile_map[row][col] == 3:
+                elif map[row][col] == 3:
                     Tile(
                         x,
                         y,
@@ -144,21 +152,19 @@ class GameServer:
             conn.close()
             return
 
-        player = Player(color, 100, 100, self.tile_size, self.tile_size)
+        player = Player(color, self.current_map["spawn"], self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
         self.sprite_groups["players"].add(player)
 
-        # Send initial information (tile map, player location, tile state, etc)
-        self.send_message(
-            conn,
-            {
-                "type": "INITIAL",
-                "TileMap": self.tile_data,
-                "Players": self.get_player_state(),
-                "YourPlayer": color,
-            },
-        )
+        # Send initial game state
+        initial_state = {
+            "type": "INITIAL",
+            "Players": self.get_player_state(),
+            "TileMap": self.tile_data,
+            "YourPlayer": player.color,
+        }
+        self.send_message(conn, initial_state)
 
         try:
             while self.running:
@@ -265,6 +271,11 @@ class GameServer:
         print(f"IP address of server is: {get_ipv4()}")
         print(f"the code is: {encode_ip(get_ipv4())}")
 
+        # Create waiting room
+        self.current_map = self.game_maps[0]
+        self.create_tile_map(self.current_map["map"])
+        self.waiting = True
+
         # Start game loop thread
         game_thread = threading.Thread(target=self.game_loop)
         game_thread.daemon = True
@@ -289,6 +300,49 @@ class GameServer:
             self.server.close()
             print("Server shut down complete")
 
+
+    def reset_game(self):
+        """Resets the game state for a new round."""
+
+        # Reset Tile Groups
+        self.sprite_groups["ground"].empty()
+        self.sprite_groups["platform"].empty()
+        self.sprite_groups["goal"].empty()
+        
+        # Choose a new random map
+        self.current_map = random.choice(self.game_maps)
+        self.create_tile_map(self.current_map["map"])
+
+        # Reset player positions
+        with self.lock:
+            for player in self.sprite_groups["players"]:
+                player.reset_position(self.current_map["spawn"])
+
+        # Reset winner
+        self.winner = None
+
+        # Send new game state to all players (including those in waiting room)
+        new_state = {
+            "type": "NEW GAME",
+            "Players": self.get_player_state(),
+            "TileMap": self.tile_data
+        }
+        message = msgpack.packb(new_state)
+        length_message = len(message).to_bytes(4, byteorder="big")
+        with self.lock:
+            for player in self.sprite_groups["players"] or self.sprite_groups["waiting-players"]:
+                try:
+                    player.conn.sendall(length_message + message)
+                except:
+                    print(f"Failed to send to {player.addr}")
+                    player.conn.close()
+                    if player in self.sprite_groups["players"]:
+                        self.sprite_groups["players"].remove(player)
+                    else:
+                        self.sprite_groups["waiting-players"].remove(player)
+
+
+    
     def game_over(self):
         if self.winner is not None:
             message = msgpack.packb({"type": "WINNER", "color": self.winner.color})
@@ -302,34 +356,46 @@ class GameServer:
                         player.conn.close()
                         self.sprite_groups["players"].remove(player)
 
+            self.reset_game()
+
+            self.game_running = True
+
     def game_loop(self):
-        """Main game loop running at 60 FPS"""
+        """Main game loop running at 45 FPS"""
+        self.running = True
         while self.running:
-            # Update all players
-            with self.lock:
-                for player in self.sprite_groups["players"]:
-                    reached_goal = player.update(self.sprite_groups)
-                    if reached_goal:
-                        self.winner = player
-                        self.running = False
+            while self.waiting:
+                self.game_running = True
+                self.waiting = False
 
-                for tile in self.sprite_groups["platform"]:
-                    changed = tile.update(self.sprite_groups["players"])
-                    if changed:
-                        self.changed_tiles.append(
-                            {"x": tile.rect.x, "y": tile.rect.y, "color": tile.color}
-                        )
+            while self.game_running:
+                # Update all players
+                with self.lock:
+                    for player in self.sprite_groups["players"]:
+                        reached_goal = player.update(self.sprite_groups, self.current_map["spawn"])
+                        if reached_goal:
+                            self.winner = player
+                            self.game_running = False
+                            break
 
-            # Broadcast state
-            self.broadcast()
 
-            # Clear changed tiles
-            self.changed_tiles = []
+                    for tile in self.sprite_groups["platform"]:
+                        changed = tile.update(self.sprite_groups["players"])
+                        if changed:
+                            self.changed_tiles.append(
+                                {"x": tile.rect.x, "y": tile.rect.y, "color": tile.color}
+                            )
 
+                # Broadcast state
+                self.broadcast()
+
+                # Clear changed tiles
+                self.changed_tiles = []
+
+                # Maintain 45 FPS
+                self.clock.tick(constants.FPS)
+            
             self.game_over()
-
-            # Maintain 60 FPS
-            self.clock.tick(constants.FPS)
 
         server.stop()
 

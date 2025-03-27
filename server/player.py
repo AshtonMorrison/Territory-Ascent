@@ -2,7 +2,7 @@ import pygame
 from shared import constants
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, color, x, y, width, height):
+    def __init__(self, color, spawn, width, height):
         super().__init__()
 
         # Load image
@@ -11,6 +11,8 @@ class Player(pygame.sprite.Sprite):
         self.image.fill(color)
 
         # Position and Rect
+        x = spawn[0]
+        y = spawn[1]
         self.rect = self.image.get_rect()
         self.rect.bottomleft = (x, y)
         self.position = pygame.math.Vector2(x, y)
@@ -34,7 +36,14 @@ class Player(pygame.sprite.Sprite):
         self.drag_vector = pygame.math.Vector2(0, 0)
 
 
-    def update(self, tile_groups):
+    def reset_position(self, Coordinates):
+        self.position.x = Coordinates[0]
+        self.position.y = Coordinates[1]
+        self.rect.bottomleft = self.position
+        self.velocity = pygame.math.Vector2(0, 0)
+        self.acceleration = pygame.math.Vector2(0, 0)
+
+    def update(self, tile_groups, spawn): #returns True if player reaches goal
         self.acceleration = pygame.math.Vector2(0, constants.Y_GRAVITY)
 
         # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
@@ -70,15 +79,35 @@ class Player(pygame.sprite.Sprite):
 
         if touched_goal:
             return True
+        
         if not touched_ground and not touched_platform:
             self.in_air = True
 
-        # Ground Collision, TO BE CHANGED IF HOLES ARE ADDED TO MAP
+        # Ground Collision
         if touched_ground:
-            self.velocity.y = 0
-            self.acceleration.y = 0
-            next_position.y = touched_ground[0].rect.top
-            self.in_air = False
+
+            tile = touched_ground[0]
+
+            # Horizontal Collision
+            if self.velocity.x > 0 and next_rect.right > tile.rect.left and self.rect.bottom > tile.rect.top + 1 and self.rect.top < tile.rect.bottom - 1:  # Left Side Collision
+                next_position.x = tile.rect.left - self.rect.width
+                self.velocity.x = 0
+                self.acceleration.x = 0
+            elif self.velocity.x < 0 and next_rect.left < tile.rect.right and self.rect.bottom > tile.rect.top + 1 and self.rect.top < tile.rect.bottom - 1:  # Right Side Collision
+                next_position.x = tile.rect.right
+                self.velocity.x = 0
+                self.acceleration.x = 0
+
+            # Vertical Collision
+            if self.velocity.y > 0 and next_rect.bottom > tile.rect.top and self.rect.bottom < tile.rect.top + 1:  # Top Side Collision
+                next_position.y = tile.rect.top
+                self.velocity.y = 0
+                self.acceleration.y = 0
+                self.in_air = False
+            elif self.velocity.y < 0 and next_rect.top < tile.rect.bottom and self.rect.top > tile.rect.bottom - 1:  # Bottom Side Collision
+                next_position.y = tile.rect.bottom + self.rect.height
+                self.velocity.y = 0
+                self.acceleration.y = 0
 
         # Platform Collision
         if touched_platform:
@@ -87,9 +116,8 @@ class Player(pygame.sprite.Sprite):
             for tile in touched_platform:
                 if tile.occupied_by is not None and tile.occupied_by != self.color:
                     # RESET POSITION
-                    next_position = pygame.math.Vector2(320, 100) # TEMPORARY LOCATION
-                    self.velocity.x = 0
-                    self.acceleration.x = 0
+                    self.reset_position(spawn)
+                    return False
 
                 else:
                     if self.velocity.y > 0 and next_rect.bottom > tile.rect.top and self.rect.bottom < tile.rect.top + 1: # Make sure player is on top of platform
@@ -120,18 +148,21 @@ class Player(pygame.sprite.Sprite):
 
 
         # Screen Border Collision
-        if next_position.x < 0: # Left
+        if next_rect.left < 0: # Left
             next_position.x = 0
             self.velocity.x = 0
             self.acceleration.x = 0
-        elif next_position.x + self.rect.width > constants.SCREEN_WIDTH: # Right
+        elif next_rect.right > constants.SCREEN_WIDTH: # Right
             next_position.x = constants.SCREEN_WIDTH - self.rect.width
             self.velocity.x = 0
             self.acceleration.x = 0
-        elif next_position.y < 0: # Top
+        elif next_rect.top < 0: # Top
             next_position.y = 0
             self.velocity.y = 0
             self.acceleration.y = 0
+        elif next_rect.bottom > constants.SCREEN_HEIGHT: # Bottom
+            self.reset_position(spawn)
+            return False
         
         # Update position
         self.position = next_position

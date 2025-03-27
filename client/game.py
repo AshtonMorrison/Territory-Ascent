@@ -124,6 +124,7 @@ class GameClient:
             except Exception as e:
                 print("connection failed: check IP address, or game code")
                 return None, "Failed to connect\n" + str(e)
+            
             # Receive initial data
             try:
                 data = self.receive_message(conn)
@@ -196,6 +197,7 @@ class GameClient:
     def create_tile_map(
         self, tile_data
     ):  # Used to create the tile map from info from server
+        self.tile_dict = {}
         for tile_info in tile_data:
             x = tile_info["x"]
             y = tile_info["y"]
@@ -279,8 +281,40 @@ class GameClient:
 
                     elif update_data["type"] == "WINNER":
                         print(f"Player {update_data['color']} has won!")
-                        self.running = False
-                        break
+                        # Display winner screen or something
+
+                    elif update_data["type"] == "NEW GAME":
+                        # Reset Players
+                        player_data = update_data["Players"]
+
+                        current_player_colors = set()
+                        with self.lock:
+                            current_player_colors = set(self.player_dict.keys())
+                        updated_player_colors = set()
+
+                        for player_info in player_data:
+                            color = player_info["color"]
+                            x = player_info["x"]
+                            y = player_info["y"]
+                            in_air = player_info["in_air"]
+                            updated_player_colors.add(color)
+
+                            with self.lock:
+                                if color in self.player_dict:
+                                    self.player_dict[color].update(x, y, in_air)
+
+                                else:
+                                    self.create_player(color, x, y, in_air)
+
+                        # Remove players that have disconnected
+                        for color in current_player_colors - updated_player_colors:
+                            with self.lock:
+                                del self.player_dict[color]
+
+                        # Reset tile map
+                        tile_data = update_data["TileMap"]
+                        self.create_tile_map(tile_data)
+
                     elif update_data["type"] == "STATE":
                         # Update player locations
                         player_data = update_data["players"]
