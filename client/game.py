@@ -365,7 +365,7 @@ class GameClient:
                             self.tile_dict[(x, y)].update(color)
 
                     elif update_data["type"] == "COUNTDOWN":
-                        self.countdown = update_data["countdown"]
+                        self.countdown = update_data["value"]
                         if self.countdown == 0:
                             # Start the GO timer when countdown reaches zero
                             self.go_timer = pygame.time.get_ticks()

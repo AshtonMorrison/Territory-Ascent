@@ -349,7 +349,7 @@ class GameServer:
         """Performs a countdown before starting the game."""
 
         for countdown_val in range(5, -1, -1):
-            message = msgpack.packb({"type": "COUNTDOWN", "countdown": countdown_val})
+            message = msgpack.packb({"type": "COUNTDOWN", "value": countdown_val})
             length_message = len(message).to_bytes(4, byteorder="big")
             with self.lock:
                 for player in self.sprite_groups["players"]:
