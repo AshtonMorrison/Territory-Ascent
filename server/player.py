@@ -28,15 +28,19 @@ class Player(pygame.sprite.Sprite):
         # Jumping
         self.in_air = False
         self.max_fall_speed = 10
+        self.drag_vector = pygame.math.Vector2(0, 0)
+
 
         # Server side stuff
         self.conn = None
         self.addr = None
 
-        # POTENTIALLY ADD TAGS FOR MOVEMENT TO GO FROM CLIENT HANDLE TO GAME LOOP UPDATE
+        # Server Tags
         self.direction = None
         self.jump = False
-        self.drag_vector = pygame.math.Vector2(0, 0)
+
+        # Wins
+        self.wins = 0
 
     def reset_position(self, Coordinates):
         self.position.x = Coordinates[0]
@@ -44,6 +48,8 @@ class Player(pygame.sprite.Sprite):
         self.rect.bottomleft = self.position
         self.velocity = pygame.math.Vector2(0, 0)
         self.acceleration = pygame.math.Vector2(0, 0)
+        self.direction = None
+        self.jump = False
 
     def update(
         self, tile_groups, spawn, check_goal=True

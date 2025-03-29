@@ -47,6 +47,7 @@ class GameClient:
 
         # Tile Dictionary
         self.tile_dict = {}
+        self.waiting_tile_dict = {} # Waiting room never changes, so we can keep it separate
         self.tile_size = constants.TILE_SIZE
 
         # Player Dictionary, SELF.ME IS THE COLOR OF THE CLIENTS PLAYER
@@ -55,13 +56,30 @@ class GameClient:
 
         self.lock = threading.Lock()
 
+        # Game Logic
         self.running = False
+        self.waiting = False
+        self.ready = False
 
-        self.countdown = 999
+        # Countdown
+        self.font = pygame.font.SysFont(constants.FONT_NAME, 150) 
+        self.countdown = 0
         self.go_timer = 0
 
-        # Font for countdown
-        self.font = pygame.font.SysFont(None, 150)  
+        # Button properties
+        self.button_color = (100, 100, 100)
+        self.button_hover_color = (150, 150, 150)
+        self.button_rect = pygame.Rect(
+            constants.SCREEN_WIDTH // 2 - 75,  # Center horizontally at the top
+            20,  # Position 20 pixels from the top (adjustable)
+            150,
+            50,
+        )
+        self.button_text_color = (255, 255, 255)
+        self.button_font = pygame.font.SysFont(None, 40)
+        self.button_text = self.button_font.render("Ready", True, self.button_text_color)
+        self.button_text_rect = self.button_text.get_rect(midleft=(self.button_rect.left + 10, self.button_rect.centery))
+
 
     def receive_message(self, conn):
         # First, receive the 4-byte header that contains the length
@@ -153,9 +171,9 @@ class GameClient:
                 self.me = initial_data["YourPlayer"]
                 print(f"You are {self.me} player")
 
-                # Create tile map
+                # Create waiting tile map
                 tile_data = initial_data["TileMap"]
-                self.create_tile_map(tile_data)
+                self.create_tile_map(tile_data, waiting=True)
 
                 # Create players
                 player_data = initial_data["Players"]
@@ -166,6 +184,9 @@ class GameClient:
                         player_info["y"],
                         player_info["in_air"],
                     )
+                
+                # Set waiting room flag
+                self.waiting = True
 
             else:
                 e = "Error: Invalid initial data received from server"
@@ -200,16 +221,21 @@ class GameClient:
                 conn.close()
 
     def create_tile_map(
-        self, tile_data
+        self, tile_data, waiting=False
     ):  # Used to create the tile map from info from server
-        self.tile_dict = {}
+        tile_dict = {}
         for tile_info in tile_data:
             x = tile_info["x"]
             y = tile_info["y"]
             tile_type = tile_info["type"]
-            self.tile_dict[(x, y)] = Tile(
+            tile_dict[(x, y)] = Tile(
                 x, y, self.tile_size, self.tile_size, tile_type
             )
+        if waiting:
+            self.waiting_tile_dict = tile_dict
+        else:
+            self.tile_dict = tile_dict
+
 
     def create_player(
         self, color, x, y, in_air
@@ -221,12 +247,17 @@ class GameClient:
     def handle_inputs(
         self, conn
     ):  # Used to handle inputs from user, must convert these inputs to messages to send to server
+        me = self.player_dict[self.me]
+        keys = pygame.key.get_pressed()
+        mouse_pressed = pygame.mouse.get_pressed()
+        mouse_pos = self.get_mouse_pos()
+
+        if self.waiting:
+            if self.check_button_click(mouse_pos, mouse_pressed):
+                self.send_message(conn, {"type": "READY"})
+                self.ready = True
 
         if self.countdown <= 0:
-            me = self.player_dict[self.me]
-            keys = pygame.key.get_pressed()
-            mouse_pressed = pygame.mouse.get_pressed()
-            mouse_pos = pygame.mouse.get_pos()
 
             # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
             if not me.dragging and not me.in_air:
@@ -267,6 +298,25 @@ class GameClient:
                         },
                     )
 
+    def check_button_click(self, mouse_pos, mouse_pressed):
+        """Check if the button is clicked."""
+
+        # Check if the mouse is within the button bounds
+        if self.button_rect.collidepoint(mouse_pos) and mouse_pressed[0] and not self.ready:
+            return True
+        else:
+            return False
+        
+    def get_mouse_pos(self):
+        """Get the mouse position scaled to the logical resolution."""
+
+        mouse_pos = pygame.mouse.get_pos()
+        scaled_mouse_pos = (
+            mouse_pos[0] * constants.SCREEN_WIDTH // self.window_size[0],
+            mouse_pos[1] * constants.SCREEN_HEIGHT // self.window_size[1],
+        )
+        return scaled_mouse_pos
+    
     def update(
         self, conn
     ):  # Used to update the game state from the servers broadcast (Player locations, tile colors), RUNS ON SEPERATE THREAD
@@ -292,7 +342,14 @@ class GameClient:
                         print(f"Player {update_data['color']} has won!")
                         # Display winner screen or something
 
+                    elif update_data["type"] == "GAME OVER":
+                        print("Game Over")
+                        self.waiting = True
+                        self.ready = False
+
                     elif update_data["type"] == "NEW GAME":
+                        self.waiting = False
+
                         # Reset Players
                         player_data = update_data["Players"]
 
@@ -358,11 +415,12 @@ class GameClient:
 
                         # Update tile colors
                         tile_data = update_data["tiles"]
-                        for tile_info in tile_data:
-                            x = tile_info["x"]
-                            y = tile_info["y"]
-                            color = tile_info["color"]
-                            self.tile_dict[(x, y)].update(color)
+                        if tile_data is not None:
+                            for tile_info in tile_data:
+                                x = tile_info["x"]
+                                y = tile_info["y"]
+                                color = tile_info["color"]
+                                self.tile_dict[(x, y)].update(color)
 
                     elif update_data["type"] == "COUNTDOWN":
                         self.countdown = update_data["value"]
@@ -386,8 +444,52 @@ class GameClient:
         self.scaled_surface.fill((255, 255, 255))
 
         # Draw tiles
-        for t in self.tile_dict.values():
-            self.scaled_surface.blit(t.image, t.rect)
+        if self.waiting:
+            for t in self.waiting_tile_dict.values():
+                self.scaled_surface.blit(t.image, t.rect)
+
+            # Draw "Ready" button with shadow
+            mouse_pos = self.get_mouse_pos()
+            if self.button_rect.collidepoint(mouse_pos):
+                button_color = self.button_hover_color
+            else:
+                button_color = self.button_color
+
+            # Shadow effect for the button (slightly offset)
+            shadow_offset = (5, 5)  # You can adjust this for shadow direction and spread
+            shadow_color = (50, 50, 50)  # Dark shadow color
+
+            # Draw shadow for the button (rounded corners)
+            pygame.draw.rect(self.scaled_surface, shadow_color, self.button_rect.move(*shadow_offset), border_radius=12)
+            self.scaled_surface.blit(self.button_text, self.button_text_rect.move(*shadow_offset))
+
+            # Draw the button itself (rounded corners)
+            pygame.draw.rect(self.scaled_surface, button_color, self.button_rect, border_radius=12)
+            self.scaled_surface.blit(self.button_text, self.button_text_rect)
+
+            # Draw checkmark box (always visible)
+            checkmark_box_size = 30
+            checkmark_box_rect = pygame.Rect(
+                self.button_rect.right - checkmark_box_size - 10,  # Position box to the right
+                self.button_rect.centery - checkmark_box_size // 2,
+                checkmark_box_size,
+                checkmark_box_size,
+            )
+
+            # White box background for the checkmark
+            pygame.draw.rect(self.scaled_surface, (255, 255, 255), checkmark_box_rect, border_radius=5)  # White box with rounded corners
+            pygame.draw.rect(self.scaled_surface, (0, 0, 0), checkmark_box_rect, 2)  # Black border
+
+            # Draw checkmark if ready
+            if self.ready:
+                checkmark_font = pygame.font.SysFont("Arial", 25)
+                checkmark_text = checkmark_font.render(u'\u2713', True, (0, 255, 0))  # Unicode checkmark
+                checkmark_rect = checkmark_text.get_rect(center=checkmark_box_rect.center)
+                self.scaled_surface.blit(checkmark_text, checkmark_rect)
+                
+        else:
+            for t in self.tile_dict.values():
+                self.scaled_surface.blit(t.image, t.rect)
 
         # Draw players
         for p in self.player_dict.values():
@@ -440,7 +542,7 @@ class GameClient:
             )
             self.scaled_surface.blit(countdown_text, text_rect)
 
-            ready_font = pygame.font.SysFont(None, 70)
+            ready_font = pygame.font.SysFont(constants.FONT_NAME, 70)
             ready_text = ready_font.render("Get Ready!", True, (255, 255, 255))
             ready_rect = ready_text.get_rect(
                 center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 - 100)

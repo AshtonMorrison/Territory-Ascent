@@ -60,7 +60,8 @@ class GameServer:
         # Tilemap
         self.tile_size = constants.TILE_SIZE
         self.changed_tiles = []  # used for sending tile changes to clients
-        self.tile_data = []  # used for initial sending of tile map to clients
+        self.tile_data = []  # used for sending of tile map to clients
+        self.waiting_tile_data = [] # used for sending of waiting room tile map to clients
 
         self.waiting_map = tilemaps.waiting_room
         self.game_maps = [tilemaps.game_1, tilemaps.game_2]
@@ -68,14 +69,14 @@ class GameServer:
 
         # Game Logic
         self.winner = None
-        self.player_ready = {}  # Track which players are ready
-
         self.running = False  # Game Loop
         self.waiting = False  # Waiting Room
         self.game_running = False  # Game Running
+        self.ready = []  # Ready Players
 
-    def create_tile_map(self, map):
-        self.tile_data = []
+    def create_tile_map(self, map, waiting=False):
+        """Creates the tile map based on the given 2D array."""
+        tile_data = []
         for row in range(len(map)):
             for col in range(len(map[row])):
                 x = col * self.tile_size
@@ -91,7 +92,7 @@ class GameServer:
                         1,
                         self.sprite_groups["ground"],
                     )
-                    self.tile_data.append({"x": x, "y": y, "type": 1})
+                    tile_data.append({"x": x, "y": y, "type": 1})
 
                 # Platform
                 elif map[row][col] == 2:
@@ -103,7 +104,7 @@ class GameServer:
                         2,
                         self.sprite_groups["platform"],
                     )
-                    self.tile_data.append({"x": x, "y": y, "type": 2})
+                    tile_data.append({"x": x, "y": y, "type": 2})
 
                 # Goal
                 elif map[row][col] == 3:
@@ -115,7 +116,12 @@ class GameServer:
                         3,
                         self.sprite_groups["goal"],
                     )
-                    self.tile_data.append({"x": x, "y": y, "type": 3})
+                    tile_data.append({"x": x, "y": y, "type": 3})
+
+        if waiting:
+            self.waiting_tile_data = tile_data
+        else:
+            self.tile_data = tile_data
 
     def receive_message(self, sock):
         # First, receive the 4-byte header that contains the length
@@ -157,17 +163,19 @@ class GameServer:
         )
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
-        self.sprite_groups["players"].add(player)
 
-        # Send initial game state
+        with self.lock:
+            self.sprite_groups["waiting-players"].add(player)
+
+    
+        # Send waiting room game state
         initial_state = {
             "type": "INITIAL",
-            "Players": self.get_player_state(),
-            "TileMap": self.tile_data,
-            "YourPlayer": player.color,
+            "Players": self.get_player_state(waiting=True),
+            "TileMap": self.waiting_tile_data,
+            "YourPlayer": player.color
         }
         self.send_message(conn, initial_state)
-        self.countdown()
 
         try:
             while self.running:
@@ -180,6 +188,10 @@ class GameServer:
                         if player_data["type"] == "DISCONNECT":
                             self.send_message(conn, "DISCONNECTED")
                             break
+
+                        # Handle ready input
+                        elif player_data["type"] == "READY":
+                            self.ready.append(player)
 
                         # Handle movement input
                         elif player_data["type"] == "MOVE":
@@ -210,14 +222,25 @@ class GameServer:
             self.unused_colors.append(player.color)
             self.used_colors.remove(player.color)
             with self.lock:
-                self.sprite_groups["players"].remove(player)
+                if player in self.sprite_groups["players"]:
+                    self.sprite_groups["players"].remove(player)
+                elif player in self.sprite_groups["waiting-players"]:
+                    self.sprite_groups["waiting-players"].remove(player)
             print(f"Client {addr} disconnected.")
 
-    def get_player_state(self):
-        return [
+    def get_player_state(self, waiting=False):
+        players = []
+        if waiting:
+            players = [
+            {"x": p.position.x, "y": p.position.y, "color": p.color, "in_air": p.in_air}
+            for p in self.sprite_groups["waiting-players"]
+        ]
+        else:
+            players = [
             {"x": p.position.x, "y": p.position.y, "color": p.color, "in_air": p.in_air}
             for p in self.sprite_groups["players"]
         ]
+        return players
 
     def get_color(self):
         if len(self.unused_colors) == 0:
@@ -228,22 +251,40 @@ class GameServer:
 
     def broadcast(self):
         """Broadcasts game state to all connected clients"""
+        waiting_state = {
+            "type": "STATE",
+            "players": self.get_player_state(waiting=True),
+            "tiles": None,
+        }
+
+        waiting_message = msgpack.packb(waiting_state)
+        waiting_length_message = len(waiting_message).to_bytes(4, byteorder="big")
+
         game_state = {
             "type": "STATE",
             "players": self.get_player_state(),
             "tiles": self.changed_tiles,
         }
 
-        message = msgpack.packb(game_state)
-        length_message = len(message).to_bytes(4, byteorder="big")
+        game_message = msgpack.packb(game_state)
+        game_length_message = len(game_message).to_bytes(4, byteorder="big")
 
         with self.lock:
             for player in self.sprite_groups["players"]:
                 try:
-                    player.conn.sendall(length_message + message)
+                    player.conn.sendall(game_length_message + game_message)
                 except:
                     print(f"Failed to send to {player.addr}")
+                    player.conn.close()
                     self.sprite_groups["players"].remove(player)
+
+            for player in self.sprite_groups["waiting-players"]:
+                try:
+                    player.conn.sendall(waiting_length_message + waiting_message)
+                except:
+                    print(f"Failed to send to {player.addr}")
+                    player.conn.close()
+                    self.sprite_groups["waiting-players"].remove
 
     def stop(self):
         """Cleanly stop the server"""
@@ -260,7 +301,7 @@ class GameServer:
         message = msgpack.packb({"type": "SHUTTING DOWN"})
         length_message = len(message).to_bytes(4, byteorder="big")
 
-        for player in self.sprite_groups["players"]:
+        for player in self.sprite_groups["players"] or self.sprite_groups["waiting-players"]:
             try:
                 player.conn.sendall(length_message + message)
                 player.conn.close()
@@ -275,8 +316,8 @@ class GameServer:
         print(f"the code is: {encode_ip(get_ipv4())}")
 
         # Create waiting room
-        self.current_map = self.game_maps[0]
-        self.create_tile_map(self.current_map["map"])
+        self.current_map = self.waiting_map
+        self.create_tile_map(self.current_map["map"], waiting=True)
         self.waiting = True
 
         # Start game loop thread
@@ -303,7 +344,65 @@ class GameServer:
             self.server.close()
             print("Server shut down complete")
 
-    def reset_game(self):
+    def countdown(self):
+        """Performs a countdown before starting the game."""
+
+        for countdown_val in range(3, -1, -1):
+            message = msgpack.packb({"type": "COUNTDOWN", "value": countdown_val})
+            length_message = len(message).to_bytes(4, byteorder="big")
+            with self.lock:
+                for player in self.sprite_groups["players"]:
+                    try:
+                        player.conn.sendall(length_message + message)
+                    except:
+                        print(f"Failed to send to {player.addr}")
+                        player.conn.close()
+                        self.sprite_groups["players"].remove(player)
+
+                # Wait for 1 second
+                pygame.time.wait(1000)
+
+                # Small delay to prevent CPU hogging
+                pygame.time.wait(10)
+    
+    def game_over(self):
+        """Handles the end of the game."""
+        
+        # Send game over message
+        message = msgpack.packb({"type": "GAME OVER"})
+        length_message = len(message).to_bytes(4, byteorder="big")
+        with self.lock:
+            for player in self.sprite_groups["players"]:
+                try:
+                    player.conn.sendall(length_message + message)
+                except:
+                    print(f"Failed to send to {player.addr}")
+                    player.conn.close()
+                    self.sprite_groups["players"].remove(player)
+        
+        # Reset game state
+        self.game_running = False
+        self.waiting = True
+        self.winner = None
+
+        # Move all players back to waiting room
+        with self.lock:
+            for player in self.sprite_groups["players"]:
+                self.sprite_groups["waiting-players"].add(player)
+            self.sprite_groups["players"].empty()
+
+        # Set current map to waiting room
+        self.current_map = self.waiting_map
+
+    def start_game(self):
+        """Starts the game from the waiting room."""
+        self.game_running = True
+        self.waiting = False
+
+        # Call reset_round to start the game
+        self.reset_round()
+
+    def reset_round(self):
         """Resets the game state for a new round."""
 
         # Reset Tile Groups
@@ -323,7 +422,17 @@ class GameServer:
         # Reset winner
         self.winner = None
 
-        # Send new game state to all players (including those in waiting room)
+        # Let waiting room into game if they ready up
+        with self.lock:
+            for player in self.sprite_groups["waiting-players"]:
+                if player in self.ready:
+                    self.sprite_groups["players"].add(player)
+                    self.sprite_groups["waiting-players"].remove(player)
+
+        # Clear ready list
+        self.ready = []
+
+        # Send new game state to all players
         new_state = {
             "type": "NEW GAME",
             "Players": self.get_player_state(),
@@ -333,109 +442,72 @@ class GameServer:
         length_message = len(message).to_bytes(4, byteorder="big")
         with self.lock:
             for player in (
-                self.sprite_groups["players"] or self.sprite_groups["waiting-players"]
+                self.sprite_groups["players"]
             ):
                 try:
                     player.conn.sendall(length_message + message)
                 except:
                     print(f"Failed to send to {player.addr}")
                     player.conn.close()
-                    if player in self.sprite_groups["players"]:
-                        self.sprite_groups["players"].remove(player)
-                    else:
-                        self.sprite_groups["waiting-players"].remove(player)
+                    self.sprite_groups["players"].remove(player)
 
-    def countdown(self):
-        """Performs a countdown before starting the game."""
-
-        for countdown_val in range(5, -1, -1):
-            message = msgpack.packb({"type": "COUNTDOWN", "value": countdown_val})
-            length_message = len(message).to_bytes(4, byteorder="big")
-            with self.lock:
-                for player in self.sprite_groups["players"]:
-                    try:
-                        player.conn.sendall(length_message + message)
-                    except:
-                        print(f"Failed to send to {player.addr}")
-                        player.conn.close()
-                        self.sprite_groups["players"].remove(player)
-
-            # Process updates for 1 second while waiting for countdown
-            start_time = pygame.time.get_ticks()
-            while pygame.time.get_ticks() - start_time < 1000:
-                # Update all players even during countdown
-                with self.lock:
-                    for player in self.sprite_groups["players"]:
-                        # Don't check for goal during countdown
-                        player.update(
-                            self.sprite_groups,
-                            self.current_map["spawn"],
-                            check_goal=False,
-                        )
-
-                    for tile in self.sprite_groups["platform"]:
-                        changed = tile.update(self.sprite_groups["players"])
-                        if changed:
-                            self.changed_tiles.append(
-                                {
-                                    "x": tile.rect.x,
-                                    "y": tile.rect.y,
-                                    "color": tile.color,
-                                }
-                            )
-
-                # Broadcast state
-                self.broadcast()
-
-                # Clear changed tiles
-                self.changed_tiles = []
-
-                # Small delay to prevent CPU hogging
-                pygame.time.wait(10)
-
-    def game_over(self):
-        if self.winner is not None:
-            message = msgpack.packb({"type": "WINNER", "color": self.winner.color})
-            length_message = len(message).to_bytes(4, byteorder="big")
-            with self.lock:
-                for player in self.sprite_groups["players"]:
-                    try:
-                        player.conn.sendall(length_message + message)
-                    except:
-                        print(f"Failed to send to {player.addr}")
-                        player.conn.close()
-                        self.sprite_groups["players"].remove(player)
-
-            self.reset_game()
-
-            pygame.time.wait(3000)
-            self.countdown()
-
-            self.game_running = True
+        # Start countdown
+        self.countdown()
+                        
+    def round_over(self):
+        """Handles the end of a round."""
+        self.winner.wins += 1
+        message = msgpack.packb({"type": "WINNER", "color": self.winner.color})
+        length_message = len(message).to_bytes(4, byteorder="big")
+        with self.lock:
+            for player in self.sprite_groups["players"]:
+                try:
+                    player.conn.sendall(length_message + message)
+                except:
+                    print(f"Failed to send to {player.addr}")
+                    player.conn.close()
+                    self.sprite_groups["players"].remove(player)
+        if self.winner.wins >= 3:
+            self.game_over()
+        else:
+            self.reset_round()
 
     def game_loop(self):
         """Main game loop running at 45 FPS"""
         self.running = True
         while self.running:
             while self.waiting:
-                self.game_running = True
-                self.waiting = False
 
-                pygame.time.wait(3000)
-                self.countdown()
+                with self.lock:
+                    for player in self.sprite_groups["waiting-players"]:
+                        player.update(self.sprite_groups, self.current_map["spawn"], check_goal=False)
+
+
+                self.broadcast()
+
+                # Start game if all players are ready
+                if self.sprite_groups["waiting-players"] and len(self.ready) == len(self.sprite_groups["waiting-players"]):
+                    self.start_game()
+                
+                # Maintain 45 FPS
+                self.clock.tick(constants.FPS)
+
+
 
             while self.game_running:
                 # Update all players
                 with self.lock:
+                    if not self.sprite_groups["players"]:
+                        self.game_over()
+                        break
+                    
                     for player in self.sprite_groups["players"]:
                         reached_goal = player.update(
                             self.sprite_groups,
-                            self.current_map["spawn"],
-                            check_goal=True,
+                            self.current_map["spawn"]
                         )
                         if reached_goal:
                             self.winner = player
-                            self.game_running = False
                             break
 
                     for tile in self.sprite_groups["platform"]:
@@ -455,10 +527,12 @@ class GameServer:
                 # Clear changed tiles
                 self.changed_tiles = []
 
+                # Check to reset round if winner
+                if self.winner is not None:
+                    self.round_over()
+                    
                 # Maintain 45 FPS
                 self.clock.tick(constants.FPS)
-
-            self.game_over()
 
         server.stop()
 
