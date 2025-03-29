@@ -61,7 +61,7 @@ class GameClient:
         self.ready = False
 
         # Countdown
-        self.font = pygame.font.SysFont(constants.FONT_NAME, 150) 
+        self.font = pygame.font.SysFont(constants.FONT_NAME, 150)
         self.countdown = 0
         self.go_timer = 0
 
@@ -76,9 +76,12 @@ class GameClient:
         )
         self.button_text_color = (255, 255, 255)
         self.button_font = pygame.font.SysFont(None, 40)
-        self.button_text = self.button_font.render("Ready", True, self.button_text_color)
-        self.button_text_rect = self.button_text.get_rect(midleft=(self.button_rect.left + 10, self.button_rect.centery))
-
+        self.button_text = self.button_font.render(
+            "Ready", True, self.button_text_color
+        )
+        self.button_text_rect = self.button_text.get_rect(
+            midleft=(self.button_rect.left + 10, self.button_rect.centery)
+        )
 
     def receive_message(self, conn):
         # First, receive the 4-byte header that contains the length
@@ -179,7 +182,7 @@ class GameClient:
                         player_info["y"],
                         player_info["in_air"],
                     )
-                
+
                 # Set waiting room flag
                 self.waiting = True
 
@@ -226,7 +229,6 @@ class GameClient:
             self.tile_dict[(x, y)] = Tile(
                 x, y, self.tile_size, self.tile_size, tile_type
             )
-
 
     def create_player(
         self, color, x, y, in_air
@@ -293,11 +295,15 @@ class GameClient:
         """Check if the button is clicked."""
 
         # Check if the mouse is within the button bounds
-        if self.button_rect.collidepoint(mouse_pos) and mouse_pressed[0] and not self.ready:
+        if (
+            self.button_rect.collidepoint(mouse_pos)
+            and mouse_pressed[0]
+            and not self.ready
+        ):
             return True
         else:
             return False
-        
+
     def get_mouse_pos(self):
         """Get the mouse position scaled to the logical resolution."""
 
@@ -307,7 +313,7 @@ class GameClient:
             mouse_pos[1] * constants.SCREEN_HEIGHT // self.window_size[1],
         )
         return scaled_mouse_pos
-    
+
     def update(
         self, conn
     ):  # Used to update the game state from the servers broadcast (Player locations, tile colors), RUNS ON SEPERATE THREAD
@@ -445,37 +451,62 @@ class GameClient:
                 button_color = self.button_color
 
             # Shadow effect for the button (slightly offset)
-            shadow_offset = (5, 5)  # You can adjust this for shadow direction and spread
+            shadow_offset = (
+                5,
+                5,
+            )  # You can adjust this for shadow direction and spread
             shadow_color = (50, 50, 50)  # Dark shadow color
 
             # Draw shadow for the button (rounded corners)
-            pygame.draw.rect(self.scaled_surface, shadow_color, self.button_rect.move(*shadow_offset), border_radius=12)
-            self.scaled_surface.blit(self.button_text, self.button_text_rect.move(*shadow_offset))
+            pygame.draw.rect(
+                self.scaled_surface,
+                shadow_color,
+                self.button_rect.move(*shadow_offset),
+                border_radius=12,
+            )
+            self.scaled_surface.blit(
+                self.button_text, self.button_text_rect.move(*shadow_offset)
+            )
 
             # Draw the button itself (rounded corners)
-            pygame.draw.rect(self.scaled_surface, button_color, self.button_rect, border_radius=12)
+            pygame.draw.rect(
+                self.scaled_surface, button_color, self.button_rect, border_radius=12
+            )
             self.scaled_surface.blit(self.button_text, self.button_text_rect)
 
             # Draw checkmark box (always visible)
             checkmark_box_size = 30
             checkmark_box_rect = pygame.Rect(
-                self.button_rect.right - checkmark_box_size - 10,  # Position box to the right
+                self.button_rect.right
+                - checkmark_box_size
+                - 10,  # Position box to the right
                 self.button_rect.centery - checkmark_box_size // 2,
                 checkmark_box_size,
                 checkmark_box_size,
             )
 
             # White box background for the checkmark
-            pygame.draw.rect(self.scaled_surface, (255, 255, 255), checkmark_box_rect, border_radius=5)  # White box with rounded corners
-            pygame.draw.rect(self.scaled_surface, (0, 0, 0), checkmark_box_rect, 2)  # Black border
+            pygame.draw.rect(
+                self.scaled_surface,
+                (255, 255, 255),
+                checkmark_box_rect,
+                border_radius=5,
+            )  # White box with rounded corners
+            pygame.draw.rect(
+                self.scaled_surface, (0, 0, 0), checkmark_box_rect, 2
+            )  # Black border
 
             # Draw checkmark if ready
             if self.ready:
                 checkmark_font = pygame.font.SysFont("Arial", 25)
-                checkmark_text = checkmark_font.render(u'\u2713', True, (0, 255, 0))  # Unicode checkmark
-                checkmark_rect = checkmark_text.get_rect(center=checkmark_box_rect.center)
+                checkmark_text = checkmark_font.render(
+                    "\u2713", True, (0, 255, 0)
+                )  # Unicode checkmark
+                checkmark_rect = checkmark_text.get_rect(
+                    center=checkmark_box_rect.center
+                )
                 self.scaled_surface.blit(checkmark_text, checkmark_rect)
-                
+
         else:
             for t in self.tile_dict.values():
                 self.scaled_surface.blit(t.image, t.rect)

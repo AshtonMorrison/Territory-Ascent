@@ -30,7 +30,6 @@ class Player(pygame.sprite.Sprite):
         self.max_fall_speed = 10
         self.drag_vector = pygame.math.Vector2(0, 0)
 
-
         # Server side stuff
         self.conn = None
         self.addr = None

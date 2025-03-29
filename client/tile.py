@@ -17,7 +17,9 @@ class Tile(pygame.sprite.Sprite):
 
             self.image.fill(border_color)
             pygame.draw.rect(
-                self.image, ground_color, [0, self.height // 2, self.width, self.height // 2]
+                self.image,
+                ground_color,
+                [0, self.height // 2, self.width, self.height // 2],
             )
 
         if image_integer == 2:
@@ -32,11 +34,13 @@ class Tile(pygame.sprite.Sprite):
 
             self.image.fill(border_color)
             pygame.draw.rect(
-                self.image, platform_color, [0, self.height // 2, self.width, self.height // 2]
+                self.image,
+                platform_color,
+                [0, self.height // 2, self.width, self.height // 2],
             )
 
         if image_integer == 3:
-            goal_color = (0, 0, 0) 
+            goal_color = (0, 0, 0)
 
             self.image.fill(goal_color)
             pygame.draw.rect(
@@ -61,8 +65,8 @@ class Tile(pygame.sprite.Sprite):
                 color = pygame.Color(color_name)
                 color = (
                     min(255, color.r + 100),
-                    min(255, color.g + 100), 
-                    min(255, color.b + 100)
+                    min(255, color.g + 100),
+                    min(255, color.b + 100),
                 )
                 border_color = (
                     max(0, color[0] - 30),
@@ -73,4 +77,6 @@ class Tile(pygame.sprite.Sprite):
             color = color_name
 
         self.image.fill(border_color)
-        pygame.draw.rect(self.image, color, [0, self.height // 2, self.width, self.height // 2])
+        pygame.draw.rect(
+            self.image, color, [0, self.height // 2, self.width, self.height // 2]
+        )

@@ -41,7 +41,7 @@ class Tile(pygame.sprite.Sprite):
             self.color = platform_color
 
         if image_integer == 3:
-            goal_color = (0, 0, 0) 
+            goal_color = (0, 0, 0)
 
             self.image.fill(goal_color)
             pygame.draw.rect(
@@ -58,10 +58,10 @@ class Tile(pygame.sprite.Sprite):
         # In Use
         self.occupied_by = None
 
-    def update(self, players): # For platform tiles
+    def update(self, players):  # For platform tiles
 
         if self.occupied_by is not None:
-        # Check if the occupying player is still colliding with the tile
+            # Check if the occupying player is still colliding with the tile
 
             # Create a slightly larger rect for collision detection
             larger_rect = self.rect.inflate(0, 2)
@@ -77,7 +77,7 @@ class Tile(pygame.sprite.Sprite):
                     self.color = self.occupied_by
                     return True
                 return False
-            
+
             # No longer occupied
             else:
                 self.occupied_by = None
@@ -85,4 +85,3 @@ class Tile(pygame.sprite.Sprite):
                     self.color = constants.DEFAULT_PLATFORM_COLOR
                     return True
                 return False
-

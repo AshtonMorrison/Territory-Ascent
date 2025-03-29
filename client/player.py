@@ -1,5 +1,6 @@
 import pygame
 
+
 class Player(pygame.sprite.Sprite):
     def __init__(self, color, x, y, width, height, in_air):
         super().__init__()
@@ -16,12 +17,19 @@ class Player(pygame.sprite.Sprite):
         border_color = (0, 0, 0)  # Black border
 
         # Drawing the border: Inflate the player's rect to draw the border
-        border_rect = self.image.get_rect().inflate(border_thickness * 2, border_thickness * 2)
+        border_rect = self.image.get_rect().inflate(
+            border_thickness * 2, border_thickness * 2
+        )
 
         # Fill the surface with border color before drawing the actual player sprite
-        border_surface = pygame.Surface([width + border_thickness * 2, height + border_thickness * 2])
+        border_surface = pygame.Surface(
+            [width + border_thickness * 2, height + border_thickness * 2]
+        )
         border_surface.fill(border_color)
-        border_rect.topleft = (-border_thickness, -border_thickness)  # Position the border correctly
+        border_rect.topleft = (
+            -border_thickness,
+            -border_thickness,
+        )  # Position the border correctly
 
         # Add the player image inside the border surface
         border_surface.blit(self.image, (border_thickness, border_thickness))
@@ -36,7 +44,7 @@ class Player(pygame.sprite.Sprite):
         self.drag_start_pos = None
         self.drag_vector = pygame.math.Vector2(0, 0)
         self.in_air = in_air
-        self.preserve_drag_state = ( False )
+        self.preserve_drag_state = False
 
     def update(self, x, y, in_air):
 

@@ -58,8 +58,16 @@ class GameServer:
         self.used_colors = []
 
         # Player Waiting Room Locations
-        self.waiting_room_locations = [(128, 120), (256, 120), (384, 120), (512, 120), 
-                                       (128, 240), (256, 240), (384, 240), (512, 240)]  # List of (x, y) coordinates for players to be placed in the waiting room
+        self.waiting_room_locations = [
+            (128, 120),
+            (256, 120),
+            (384, 120),
+            (512, 120),
+            (128, 240),
+            (256, 240),
+            (384, 240),
+            (512, 240),
+        ]  # List of (x, y) coordinates for players to be placed in the waiting room
         self.used_waiting_room_locations = []
 
         # Tilemap
@@ -155,23 +163,20 @@ class GameServer:
             self.send_message(conn, "Error: No more colors available")
             conn.close()
             return
-        
+
         location = self.get_waiting_room_location()
-        player = Player(
-            color, location, self.tile_size, self.tile_size
-        )
+        player = Player(color, location, self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
 
         with self.lock:
             self.sprite_groups["waiting-players"].add(player)
 
-    
         # Send waiting room game state
         initial_state = {
             "type": "INITIAL",
             "Players": self.get_player_state(waiting=True),
-            "YourPlayer": player.color
+            "YourPlayer": player.color,
         }
         self.send_message(conn, initial_state)
 
@@ -232,14 +237,24 @@ class GameServer:
         players = []
         if waiting:
             players = [
-            {"x": p.position.x, "y": p.position.y, "color": p.color, "in_air": p.in_air}
-            for p in self.sprite_groups["waiting-players"]
-        ]
+                {
+                    "x": p.position.x,
+                    "y": p.position.y,
+                    "color": p.color,
+                    "in_air": p.in_air,
+                }
+                for p in self.sprite_groups["waiting-players"]
+            ]
         else:
             players = [
-            {"x": p.position.x, "y": p.position.y, "color": p.color, "in_air": p.in_air}
-            for p in self.sprite_groups["players"]
-        ]
+                {
+                    "x": p.position.x,
+                    "y": p.position.y,
+                    "color": p.color,
+                    "in_air": p.in_air,
+                }
+                for p in self.sprite_groups["players"]
+            ]
         return players
 
     def get_color(self):
@@ -306,7 +321,9 @@ class GameServer:
         message = msgpack.packb({"type": "SHUTTING DOWN"})
         length_message = len(message).to_bytes(4, byteorder="big")
 
-        for player in self.sprite_groups["players"] or self.sprite_groups["waiting-players"]:
+        for player in (
+            self.sprite_groups["players"] or self.sprite_groups["waiting-players"]
+        ):
             try:
                 player.conn.sendall(length_message + message)
                 player.conn.close()
@@ -367,10 +384,10 @@ class GameServer:
 
                 # Small delay to prevent CPU hogging
                 pygame.time.wait(10)
-    
+
     def game_over(self):
         """Handles the end of the game."""
-        
+
         # Send game over message
         message = msgpack.packb({"type": "GAME OVER"})
         length_message = len(message).to_bytes(4, byteorder="big")
@@ -382,7 +399,7 @@ class GameServer:
                     print(f"Failed to send to {player.addr}")
                     player.conn.close()
                     self.sprite_groups["players"].remove(player)
-        
+
         # Reset game state
         self.game_running = False
         self.waiting = True
@@ -395,7 +412,6 @@ class GameServer:
                 self.sprite_groups["waiting-players"].add(player)
                 player.reset_position(self.get_waiting_room_location())
             self.sprite_groups["players"].empty()
-        
 
     def start_game(self):
         """Starts the game from the waiting room."""
@@ -449,9 +465,7 @@ class GameServer:
         message = msgpack.packb(new_state)
         length_message = len(message).to_bytes(4, byteorder="big")
         with self.lock:
-            for player in (
-                self.sprite_groups["players"]
-            ):
+            for player in self.sprite_groups["players"]:
                 try:
                     player.conn.sendall(length_message + message)
                 except:
@@ -461,7 +475,7 @@ class GameServer:
 
         # Start countdown
         self.countdown()
-                        
+
     def round_over(self):
         """Handles the end of a round."""
         self.winner.wins += 1
@@ -488,15 +502,15 @@ class GameServer:
 
                 # Start game if all players are ready
                 with self.lock:
-                    if self.sprite_groups["waiting-players"] and len(self.ready) == len(self.sprite_groups["waiting-players"]):
+                    if self.sprite_groups["waiting-players"] and len(self.ready) == len(
+                        self.sprite_groups["waiting-players"]
+                    ):
                         self.start_game()
 
                 self.broadcast()
 
                 # Maintain 45 FPS
                 self.clock.tick(constants.FPS)
-
-
 
             while self.game_running:
                 # Update all players
@@ -507,8 +521,7 @@ class GameServer:
 
                     for player in self.sprite_groups["players"]:
                         reached_goal = player.update(
-                            self.sprite_groups,
-                            self.current_map["spawn"]
+                            self.sprite_groups, self.current_map["spawn"]
                         )
                         if reached_goal:
                             self.winner = player
@@ -534,7 +547,7 @@ class GameServer:
                 # Check to reset round if winner
                 if self.winner is not None:
                     self.round_over()
-                    
+
                 # Maintain 45 FPS
                 self.clock.tick(constants.FPS)
 
