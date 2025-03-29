@@ -168,6 +168,7 @@ class GameServer:
         player = Player(color, location, self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
+        player.ready = False  # Set initial ready state
 
         with self.lock:
             self.sprite_groups["waiting-players"].add(player)
@@ -183,38 +184,39 @@ class GameServer:
         try:
             while self.running:
                 try:
-                    try:
-                        data = self.receive_message(conn)
-                        player_data = msgpack.unpackb(data)
+                    data = self.receive_message(conn)
+                    player_data = msgpack.unpackb(data)
 
-                        # Handle disconnect input
-                        if player_data["type"] == "DISCONNECT":
-                            self.send_message(conn, "DISCONNECTED")
-                            break
+                    # Handle disconnect input
+                    if player_data["type"] == "DISCONNECT":
+                        self.send_message(conn, "DISCONNECTED")
+                        break
 
-                        # Handle ready input
-                        elif player_data["type"] == "READY":
+                    # Handle ready input
+                    elif player_data["type"] == "READY":
+                        player.ready = True  # Mark player as ready
+                        if player not in self.ready:  # Avoid duplicate entries
                             self.ready.append(player)
 
-                        # Handle movement input
-                        elif player_data["type"] == "MOVE":
-                            # player = self.clients[addr]
-                            if player_data["direction"] in ["left", "right"]:
-                                player.direction = player_data["direction"]
-                            else:
-                                print(f"Invalid direction: {player_data['direction']}")
+                    # Handle movement input
+                    elif player_data["type"] == "MOVE":
+                        # player = self.clients[addr]
+                        if player_data["direction"] in ["left", "right"]:
+                            player.direction = player_data["direction"]
+                        else:
+                            print(f"Invalid direction: {player_data['direction']}")
 
-                        # Handle jump input
-                        elif player_data["type"] == "JUMP":
-                            # player = self.clients[addr]
-                            player.jump = True
-                            player.drag_vector = pygame.math.Vector2(
-                                player_data["drag_x"], player_data["drag_y"]
-                            )
+                    # Handle jump input
+                    elif player_data["type"] == "JUMP":
+                        # player = self.clients[addr]
+                        player.jump = True
+                        player.drag_vector = pygame.math.Vector2(
+                            player_data["drag_x"], player_data["drag_y"]
+                        )
 
-                    except Exception as e:
-                        print(f"Error processing message from {addr}: {e}")
-                        break
+                except Exception as e:
+                    print(f"Error processing message from {addr}: {e}")
+                    break
 
                 except socket.timeout:
                     continue
@@ -422,11 +424,12 @@ class GameServer:
             self.waiting_room_locations.append(loc)
         self.used_waiting_room_locations = []
 
-        # Clear ready list
-        self.ready = []
 
         # Call reset_round to start the game
         self.reset_round()
+
+        # Clear ready list
+        self.ready = []
 
     def reset_round(self):
         """Resets the game state for a new round."""
@@ -499,13 +502,17 @@ class GameServer:
         self.running = True
         while self.running:
             while self.waiting:
-
-                # Start game if all players are ready
+                should_start_game = False
                 with self.lock:
-                    if self.sprite_groups["waiting-players"] and len(self.ready) == len(
-                        self.sprite_groups["waiting-players"]
+
+                    if self.sprite_groups["waiting-players"] and all(
+                        player.ready for player in self.sprite_groups["waiting-players"]
                     ):
-                        self.start_game()
+                        print("All players are ready!")
+                        should_start_game = True
+
+                if should_start_game:
+                    self.start_game()
 
                 self.broadcast()
 
