@@ -57,13 +57,16 @@ class GameServer:
         ]  # 8 Players, should be fine
         self.used_colors = []
 
+        # Player Waiting Room Locations
+        self.waiting_room_locations = [(128, 120), (256, 120), (384, 120), (512, 120), 
+                                       (128, 240), (256, 240), (384, 240), (512, 240)]  # List of (x, y) coordinates for players to be placed in the waiting room
+        self.used_waiting_room_locations = []
+
         # Tilemap
         self.tile_size = constants.TILE_SIZE
         self.changed_tiles = []  # used for sending tile changes to clients
         self.tile_data = []  # used for sending of tile map to clients
-        self.waiting_tile_data = [] # used for sending of waiting room tile map to clients
 
-        self.waiting_map = tilemaps.waiting_room
         self.game_maps = [tilemaps.game_1, tilemaps.game_2]
         self.current_map = None
 
@@ -76,7 +79,7 @@ class GameServer:
 
     def create_tile_map(self, map, waiting=False):
         """Creates the tile map based on the given 2D array."""
-        tile_data = []
+        self.tile_data = []
         for row in range(len(map)):
             for col in range(len(map[row])):
                 x = col * self.tile_size
@@ -92,7 +95,7 @@ class GameServer:
                         1,
                         self.sprite_groups["ground"],
                     )
-                    tile_data.append({"x": x, "y": y, "type": 1})
+                    self.tile_data.append({"x": x, "y": y, "type": 1})
 
                 # Platform
                 elif map[row][col] == 2:
@@ -104,7 +107,7 @@ class GameServer:
                         2,
                         self.sprite_groups["platform"],
                     )
-                    tile_data.append({"x": x, "y": y, "type": 2})
+                    self.tile_data.append({"x": x, "y": y, "type": 2})
 
                 # Goal
                 elif map[row][col] == 3:
@@ -116,12 +119,7 @@ class GameServer:
                         3,
                         self.sprite_groups["goal"],
                     )
-                    tile_data.append({"x": x, "y": y, "type": 3})
-
-        if waiting:
-            self.waiting_tile_data = tile_data
-        else:
-            self.tile_data = tile_data
+                    self.tile_data.append({"x": x, "y": y, "type": 3})
 
     def receive_message(self, sock):
         # First, receive the 4-byte header that contains the length
@@ -157,9 +155,10 @@ class GameServer:
             self.send_message(conn, "Error: No more colors available")
             conn.close()
             return
-
+        
+        location = self.get_waiting_room_location()
         player = Player(
-            color, self.current_map["spawn"], self.tile_size, self.tile_size
+            color, location, self.tile_size, self.tile_size
         )
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
@@ -172,7 +171,6 @@ class GameServer:
         initial_state = {
             "type": "INITIAL",
             "Players": self.get_player_state(waiting=True),
-            "TileMap": self.waiting_tile_data,
             "YourPlayer": player.color
         }
         self.send_message(conn, initial_state)
@@ -226,6 +224,8 @@ class GameServer:
                     self.sprite_groups["players"].remove(player)
                 elif player in self.sprite_groups["waiting-players"]:
                     self.sprite_groups["waiting-players"].remove(player)
+                    self.waiting_room_locations.append(location)
+                    self.used_waiting_room_locations.remove(location)
             print(f"Client {addr} disconnected.")
 
     def get_player_state(self, waiting=False):
@@ -248,6 +248,11 @@ class GameServer:
         color = self.unused_colors.pop(0)
         self.used_colors.append(color)
         return color
+
+    def get_waiting_room_location(self):
+        location = self.waiting_room_locations.pop(0)
+        self.used_waiting_room_locations.append(location)
+        return location
 
     def broadcast(self):
         """Broadcasts game state to all connected clients"""
@@ -315,9 +320,7 @@ class GameServer:
         print(f"IP address of server is: {get_ipv4()}")
         print(f"the code is: {encode_ip(get_ipv4())}")
 
-        # Create waiting room
-        self.current_map = self.waiting_map
-        self.create_tile_map(self.current_map["map"], waiting=True)
+        # Begin Waiting Room
         self.waiting = True
 
         # Start game loop thread
@@ -384,20 +387,27 @@ class GameServer:
         self.game_running = False
         self.waiting = True
         self.winner = None
+        self.current_map = None
 
         # Move all players back to waiting room
         with self.lock:
             for player in self.sprite_groups["players"]:
                 self.sprite_groups["waiting-players"].add(player)
+                player.reset_position(self.get_waiting_room_location())
             self.sprite_groups["players"].empty()
-
-        # Set current map to waiting room
-        self.current_map = self.waiting_map
+        
 
     def start_game(self):
         """Starts the game from the waiting room."""
         self.game_running = True
         self.waiting = False
+
+        for loc in self.used_waiting_room_locations:
+            self.waiting_room_locations.append(loc)
+        self.used_waiting_room_locations = []
+
+        # Clear ready list
+        self.ready = []
 
         # Call reset_round to start the game
         self.reset_round()
@@ -414,6 +424,13 @@ class GameServer:
         self.current_map = random.choice(self.game_maps)
         self.create_tile_map(self.current_map["map"])
 
+        # Let waiting room into game if they ready up
+        with self.lock:
+            for player in list(self.sprite_groups["waiting-players"]):
+                if player in self.ready:
+                    self.sprite_groups["players"].add(player)
+                    self.sprite_groups["waiting-players"].remove(player)
+
         # Reset player positions
         with self.lock:
             for player in self.sprite_groups["players"]:
@@ -421,16 +438,6 @@ class GameServer:
 
         # Reset winner
         self.winner = None
-
-        # Let waiting room into game if they ready up
-        with self.lock:
-            for player in self.sprite_groups["waiting-players"]:
-                if player in self.ready:
-                    self.sprite_groups["players"].add(player)
-                    self.sprite_groups["waiting-players"].remove(player)
-
-        # Clear ready list
-        self.ready = []
 
         # Send new game state to all players
         new_state = {
@@ -478,17 +485,13 @@ class GameServer:
         while self.running:
             while self.waiting:
 
+                # Start game if all players are ready
                 with self.lock:
-                    for player in self.sprite_groups["waiting-players"]:
-                        player.update(self.sprite_groups, self.current_map["spawn"], check_goal=False)
-
+                    if self.sprite_groups["waiting-players"] and len(self.ready) == len(self.sprite_groups["waiting-players"]):
+                        self.start_game()
 
                 self.broadcast()
 
-                # Start game if all players are ready
-                if self.sprite_groups["waiting-players"] and len(self.ready) == len(self.sprite_groups["waiting-players"]):
-                    self.start_game()
-                
                 # Maintain 45 FPS
                 self.clock.tick(constants.FPS)
 
@@ -500,7 +503,7 @@ class GameServer:
                     if not self.sprite_groups["players"]:
                         self.game_over()
                         break
-                    
+
                     for player in self.sprite_groups["players"]:
                         reached_goal = player.update(
                             self.sprite_groups,

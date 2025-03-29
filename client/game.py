@@ -47,7 +47,6 @@ class GameClient:
 
         # Tile Dictionary
         self.tile_dict = {}
-        self.waiting_tile_dict = {} # Waiting room never changes, so we can keep it separate
         self.tile_size = constants.TILE_SIZE
 
         # Player Dictionary, SELF.ME IS THE COLOR OF THE CLIENTS PLAYER
@@ -171,10 +170,6 @@ class GameClient:
                 self.me = initial_data["YourPlayer"]
                 print(f"You are {self.me} player")
 
-                # Create waiting tile map
-                tile_data = initial_data["TileMap"]
-                self.create_tile_map(tile_data, waiting=True)
-
                 # Create players
                 player_data = initial_data["Players"]
                 for player_info in player_data:
@@ -221,20 +216,16 @@ class GameClient:
                 conn.close()
 
     def create_tile_map(
-        self, tile_data, waiting=False
+        self, tile_data
     ):  # Used to create the tile map from info from server
-        tile_dict = {}
+        self.tile_dict = {}
         for tile_info in tile_data:
             x = tile_info["x"]
             y = tile_info["y"]
             tile_type = tile_info["type"]
-            tile_dict[(x, y)] = Tile(
+            self.tile_dict[(x, y)] = Tile(
                 x, y, self.tile_size, self.tile_size, tile_type
             )
-        if waiting:
-            self.waiting_tile_dict = tile_dict
-        else:
-            self.tile_dict = tile_dict
 
 
     def create_player(
@@ -257,7 +248,7 @@ class GameClient:
                 self.send_message(conn, {"type": "READY"})
                 self.ready = True
 
-        if self.countdown <= 0:
+        elif self.countdown <= 0:
 
             # Movement (Left, Right) (No acceleration) (No moving while jumping or dragging)
             if not me.dragging and not me.in_air:
@@ -445,8 +436,6 @@ class GameClient:
 
         # Draw tiles
         if self.waiting:
-            for t in self.waiting_tile_dict.values():
-                self.scaled_surface.blit(t.image, t.rect)
 
             # Draw "Ready" button with shadow
             mouse_pos = self.get_mouse_pos()
