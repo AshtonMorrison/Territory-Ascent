@@ -381,11 +381,11 @@ class GameServer:
                         player.conn.close()
                         self.sprite_groups["players"].remove(player)
 
-                # Wait for 1 second
-                pygame.time.wait(1000)
+                if countdown_val != 0:
+                    pygame.time.wait(1000)
 
-                # Small delay to prevent CPU hogging
-                pygame.time.wait(10)
+                    # Small delay to prevent CPU hogging
+                    pygame.time.wait(10)
 
     def game_over(self):
         """Handles the end of the game."""
