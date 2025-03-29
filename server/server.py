@@ -426,7 +426,8 @@ class GameServer:
 
         # Let waiting room into game if they ready up
         with self.lock:
-            for player in list(self.sprite_groups["waiting-players"]):
+            players = list(self.sprite_groups["waiting-players"])
+            for player in players:
                 if player in self.ready:
                     self.sprite_groups["players"].add(player)
                     self.sprite_groups["waiting-players"].remove(player)
