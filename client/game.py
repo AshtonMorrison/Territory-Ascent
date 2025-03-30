@@ -335,14 +335,19 @@ class GameClient:
                         self.running = False
                         break
 
-                    elif update_data["type"] == "WINNER":
-                        print(f"Player {update_data['color']} has won!")
-                        # Display winner screen or something
+                    elif update_data["type"] == "ROUND OVER":
+                        winner = update_data["winner"]
+                        self.player_dict[winner].wins += 1
+                        print(f"Round Over! {winner} got the point!")
 
                     elif update_data["type"] == "GAME OVER":
-                        print("Game Over")
+                        winner = update_data["winner"]
+                        print(f"Game Over! {winner} wins!")
                         self.waiting = True
                         self.ready = False
+                        
+                        for p in self.player_dict.values():
+                            p.wins = 0
 
                     elif update_data["type"] == "NEW GAME":
                         self.waiting = False
@@ -413,11 +418,12 @@ class GameClient:
                         # Update tile colors
                         tile_data = update_data["tiles"]
                         if tile_data is not None:
-                            for tile_info in tile_data:
-                                x = tile_info["x"]
-                                y = tile_info["y"]
-                                color = tile_info["color"]
-                                self.tile_dict[(x, y)].update(color)
+                            with self.lock:
+                                for tile_info in tile_data:
+                                    x = tile_info["x"]
+                                    y = tile_info["y"]
+                                    color = tile_info["color"]
+                                    self.tile_dict[(x, y)].update(color)
 
                     elif update_data["type"] == "COUNTDOWN":
                         self.countdown = update_data["value"]
@@ -440,7 +446,6 @@ class GameClient:
         # Render everything onto the internal surface
         self.scaled_surface.fill((255, 255, 255))
 
-        # Draw tiles
         if self.waiting:
 
             # Draw "Ready" button with shadow
@@ -508,12 +513,31 @@ class GameClient:
                 self.scaled_surface.blit(checkmark_text, checkmark_rect)
 
         else:
+            # Draw tiles
             for t in self.tile_dict.values():
                 self.scaled_surface.blit(t.image, t.rect)
 
         # Draw players
-        for p in self.player_dict.values():
-            self.scaled_surface.blit(p.image, p.rect)
+        with self.lock:
+            for p in self.player_dict.values():
+                self.scaled_surface.blit(p.image, p.rect)
+                if self.waiting:
+                    font = pygame.font.SysFont(constants.FONT_NAME, 20)
+                    words = p.color if p.color != self.me else "You"
+                    text = font.render(words, True, p.color)
+                    text_rect = text.get_rect(center=(p.rect.centerx, p.rect.bottom + 10))
+
+                    # Outline the text in black
+                    outline_width = 2  # Adjust as needed
+                    for dx in range(-outline_width, outline_width + 1):
+                        for dy in range(-outline_width, outline_width + 1):
+                            if dx*dx + dy*dy <= outline_width*outline_width: # Draw only in a circle
+                                outline_rect = text_rect.move(dx, dy)
+                                outline = font.render(words, True, (0, 0, 0))  # Black outline
+                                self.scaled_surface.blit(outline, outline_rect)
+
+                    # Draw the text in the player's color
+                    self.scaled_surface.blit(text, text_rect)
 
         # Draw drag vector if dragging
         if self.me and self.player_dict[self.me].dragging:
@@ -568,6 +592,38 @@ class GameClient:
                 center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 - 100)
             )
             self.scaled_surface.blit(ready_text, ready_rect)
+            
+            # Display scores at the bottom
+            score_font = pygame.font.SysFont(constants.FONT_NAME, 30)
+            y_offset = 0
+            x_offset = 0
+            count = 0
+            for color, player in self.player_dict.items():
+                color == "You" if color == self.me else color
+                score_text = score_font.render(f"{color}: {player.wins}", True, color)
+                score_rect = score_text.get_rect(
+                    center=(
+                        constants.SCREEN_WIDTH // 5 + x_offset,
+                        constants.SCREEN_HEIGHT - 80 + y_offset,
+                    )
+                )
+
+                # Outline the text in black
+                outline_width = 2  # Adjust as needed
+                for dx in range(-outline_width, outline_width + 1):
+                    for dy in range(-outline_width, outline_width + 1):
+                        if dx*dx + dy*dy <= outline_width*outline_width: # Draw only in a circle
+                            outline_rect = score_rect.move(dx, dy)
+                            outline = score_font.render(f"{color}: {player.wins}", True, (0, 0, 0))  # Black outline
+                            self.scaled_surface.blit(outline, outline_rect)
+
+                self.scaled_surface.blit(score_text, score_rect)
+                x_offset += constants.SCREEN_WIDTH // 5  # Move to the next column
+
+                count += 1
+                if count == 4:  # Move to the next row after 4 players
+                    y_offset = 40
+                    x_offset = 0
 
         elif self.countdown == 0 and self.go_timer > 0:
             if current_time - self.go_timer < 1000:

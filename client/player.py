@@ -45,6 +45,9 @@ class Player(pygame.sprite.Sprite):
         self.drag_vector = pygame.math.Vector2(0, 0)
         self.in_air = in_air
         self.preserve_drag_state = False
+        
+        # Wins
+        self.wins = 0
 
     def update(self, x, y, in_air):
 

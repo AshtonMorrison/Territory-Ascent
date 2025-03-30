@@ -9,7 +9,6 @@ class Player(pygame.sprite.Sprite):
         # Load image
         self.color = color
         self.image = pygame.Surface([width, height])
-        self.image.fill(color)
 
         # Position and Rect
         x = spawn[0]

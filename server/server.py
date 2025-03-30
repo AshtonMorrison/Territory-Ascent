@@ -58,16 +58,9 @@ class GameServer:
         self.used_colors = []
 
         # Player Waiting Room Locations
-        self.waiting_room_locations = [
-            (128, 120),
-            (256, 120),
-            (384, 120),
-            (512, 120),
-            (128, 240),
-            (256, 240),
-            (384, 240),
-            (512, 240),
-        ]  # List of (x, y) coordinates for players to be placed in the waiting room
+        self.waiting_room_locations = [ (128, 160), (256, 160), (384, 160), (512, 160),
+                                        (128, 280), (256, 280), (384, 280), (512, 280),
+                                      ]  # List of (x, y) coordinates for players to be placed in the waiting room
         self.used_waiting_room_locations = []
 
         # Tilemap
@@ -391,16 +384,17 @@ class GameServer:
         """Handles the end of the game."""
 
         # Send game over message
-        message = msgpack.packb({"type": "GAME OVER"})
-        length_message = len(message).to_bytes(4, byteorder="big")
-        with self.lock:
-            for player in self.sprite_groups["players"]:
-                try:
-                    player.conn.sendall(length_message + message)
-                except:
-                    print(f"Failed to send to {player.addr}")
-                    player.conn.close()
-                    self.sprite_groups["players"].remove(player)
+        if self.winner is not None:
+            message = msgpack.packb({"type": "GAME OVER", "winner": self.winner.color})
+            length_message = len(message).to_bytes(4, byteorder="big")
+            with self.lock:
+                for player in self.sprite_groups["players"]:
+                    try:
+                        player.conn.sendall(length_message + message)
+                    except:
+                        print(f"Failed to send to {player.addr}")
+                        player.conn.close()
+                        self.sprite_groups["players"].remove(player)
 
         # Reset game state
         self.game_running = False
@@ -482,20 +476,20 @@ class GameServer:
     def round_over(self):
         """Handles the end of a round."""
         self.winner.wins += 1
-        message = msgpack.packb({"type": "WINNER", "color": self.winner.color})
-        length_message = len(message).to_bytes(4, byteorder="big")
-        with self.lock:
-            for player in self.sprite_groups["players"]:
-                try:
-                    player.conn.sendall(length_message + message)
-                except:
-                    print(f"Failed to send to {player.addr}")
-                    player.conn.close()
-                    self.sprite_groups["players"].remove(player)
-        if self.winner.wins >= 3:
-            self.game_over()
-        else:
+        if self.winner.wins < 3:
+            message = msgpack.packb({"type": "ROUND OVER", "winner": self.winner.color})
+            length_message = len(message).to_bytes(4, byteorder="big")
+            with self.lock:
+                for player in self.sprite_groups["players"]:
+                    try:
+                        player.conn.sendall(length_message + message)
+                    except:
+                        print(f"Failed to send to {player.addr}")
+                        player.conn.close()
+                        self.sprite_groups["players"].remove(player)
             self.reset_round()
+        elif self.winner.wins >= 3:
+            self.game_over()
 
     def game_loop(self):
         """Main game loop running at 45 FPS"""
@@ -524,7 +518,6 @@ class GameServer:
                 with self.lock:
                     if not self.sprite_groups["players"]:
                         self.game_over()
-                        break
 
                     for player in self.sprite_groups["players"]:
                         reached_goal = player.update(
