@@ -60,6 +60,9 @@ class GameClient:
         self.waiting = False
         self.ready = False
 
+        self.winner = None
+        self.winner_display_start_time = None
+
         # Countdown
         self.font = pygame.font.SysFont(constants.FONT_NAME, 150)
         self.countdown = 0
@@ -341,8 +344,12 @@ class GameClient:
                         print(f"Round Over! {winner} got the point!")
 
                     elif update_data["type"] == "GAME OVER":
-                        winner = update_data["winner"]
+                        self.winner = update_data["winner"]
                         print(f"Game Over! {winner} wins!")
+
+                        # Record the time when the winner message was processed
+                        self.winner_display_start_time = pygame.time.get_ticks()
+
                         self.waiting = True
                         self.ready = False
                         
@@ -450,196 +457,215 @@ class GameClient:
     def draw(self):
         # Render everything onto the internal surface
         self.scaled_surface.fill((255, 255, 255))
+        if self.winner:
+            # Display winner text
+            words = f"Winner is: {self.winner}!"
+            font = pygame.font.SysFont(constants.FONT_NAME, 50)
+            text = font.render(words, True, self.winner)
+            text_rect = text.get_rect(center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2))
 
-        if self.waiting:
+            # Outline the text in black
+            outline_width = 2  # Adjust as needed
+            for dx in range(-outline_width, outline_width + 1):
+                for dy in range(-outline_width, outline_width + 1):
+                    if dx*dx + dy*dy <= outline_width*outline_width: # Draw only in a circle
+                        outline_rect = text_rect.move(dx, dy)
+                        outline = font.render(words, True, (0, 0, 0))  # Black outline
+                        self.scaled_surface.blit(outline, outline_rect)
 
-            # Draw "Ready" button with shadow
-            mouse_pos = self.get_mouse_pos()
-            if self.button_rect.collidepoint(mouse_pos):
-                button_color = self.button_hover_color
-            else:
-                button_color = self.button_color
-
-            # Shadow effect for the button (slightly offset)
-            shadow_offset = (
-                5,
-                5,
-            )  # You can adjust this for shadow direction and spread
-            shadow_color = (50, 50, 50)  # Dark shadow color
-
-            # Draw shadow for the button (rounded corners)
-            pygame.draw.rect(
-                self.scaled_surface,
-                shadow_color,
-                self.button_rect.move(*shadow_offset),
-                border_radius=12,
-            )
-            self.scaled_surface.blit(
-                self.button_text, self.button_text_rect.move(*shadow_offset)
-            )
-
-            # Draw the button itself (rounded corners)
-            pygame.draw.rect(
-                self.scaled_surface, button_color, self.button_rect, border_radius=12
-            )
-            self.scaled_surface.blit(self.button_text, self.button_text_rect)
-
-            # Draw checkmark box (always visible)
-            checkmark_box_size = 30
-            checkmark_box_rect = pygame.Rect(
-                self.button_rect.right
-                - checkmark_box_size
-                - 10,  # Position box to the right
-                self.button_rect.centery - checkmark_box_size // 2,
-                checkmark_box_size,
-                checkmark_box_size,
-            )
-
-            # White box background for the checkmark
-            pygame.draw.rect(
-                self.scaled_surface,
-                (255, 255, 255),
-                checkmark_box_rect,
-                border_radius=5,
-            )  # White box with rounded corners
-            pygame.draw.rect(
-                self.scaled_surface, (0, 0, 0), checkmark_box_rect, 2
-            )  # Black border
-
-            # Draw checkmark if ready
-            if self.ready:
-                checkmark_font = pygame.font.SysFont("Arial", 25)
-                checkmark_text = checkmark_font.render(
-                    "\u2713", True, (0, 255, 0)
-                )  # Unicode checkmark
-                checkmark_rect = checkmark_text.get_rect(
-                    center=checkmark_box_rect.center
-                )
-                self.scaled_surface.blit(checkmark_text, checkmark_rect)
+            # Draw the text in the player's color
+            self.scaled_surface.blit(text, text_rect)
 
         else:
-            # Draw tiles
-            for t in self.tile_dict.values():
-                self.scaled_surface.blit(t.image, t.rect)
+            if self.waiting:
 
-        # Draw players
-        with self.lock:
-            for p in self.player_dict.values():
-                self.scaled_surface.blit(p.image, p.rect)
+                # Draw "Ready" button with shadow
+                mouse_pos = self.get_mouse_pos()
+                if self.button_rect.collidepoint(mouse_pos):
+                    button_color = self.button_hover_color
+                else:
+                    button_color = self.button_color
 
-                if self.waiting:
-                    font = pygame.font.SysFont(constants.FONT_NAME, 20)
-                    words = p.color if p.color != self.me else "You"
-                    text = font.render(words, True, p.color)
-                    text_rect = text.get_rect(center=(p.rect.centerx, p.rect.bottom + 15))
+                # Shadow effect for the button (slightly offset)
+                shadow_offset = (
+                    5,
+                    5,
+                )  # You can adjust this for shadow direction and spread
+                shadow_color = (50, 50, 50)  # Dark shadow color
+
+                # Draw shadow for the button (rounded corners)
+                pygame.draw.rect(
+                    self.scaled_surface,
+                    shadow_color,
+                    self.button_rect.move(*shadow_offset),
+                    border_radius=12,
+                )
+                self.scaled_surface.blit(
+                    self.button_text, self.button_text_rect.move(*shadow_offset)
+                )
+
+                # Draw the button itself (rounded corners)
+                pygame.draw.rect(
+                    self.scaled_surface, button_color, self.button_rect, border_radius=12
+                )
+                self.scaled_surface.blit(self.button_text, self.button_text_rect)
+
+                # Draw checkmark box (always visible)
+                checkmark_box_size = 30
+                checkmark_box_rect = pygame.Rect(
+                    self.button_rect.right
+                    - checkmark_box_size
+                    - 10,  # Position box to the right
+                    self.button_rect.centery - checkmark_box_size // 2,
+                    checkmark_box_size,
+                    checkmark_box_size,
+                )
+
+                # White box background for the checkmark
+                pygame.draw.rect(
+                    self.scaled_surface,
+                    (255, 255, 255),
+                    checkmark_box_rect,
+                    border_radius=5,
+                )  # White box with rounded corners
+                pygame.draw.rect(
+                    self.scaled_surface, (0, 0, 0), checkmark_box_rect, 2
+                )  # Black border
+
+                # Draw checkmark if ready
+                if self.ready:
+                    checkmark_font = pygame.font.SysFont("Arial", 25)
+                    checkmark_text = checkmark_font.render(
+                        "\u2713", True, (0, 255, 0)
+                    )  # Unicode checkmark
+                    checkmark_rect = checkmark_text.get_rect(
+                        center=checkmark_box_rect.center
+                    )
+                    self.scaled_surface.blit(checkmark_text, checkmark_rect)
+
+            else:
+                # Draw tiles
+                for t in self.tile_dict.values():
+                    self.scaled_surface.blit(t.image, t.rect)
+
+            # Draw players
+            with self.lock:
+                for p in self.player_dict.values():
+                    self.scaled_surface.blit(p.image, p.rect)
+
+                    if self.waiting:
+                        font = pygame.font.SysFont(constants.FONT_NAME, 20)
+                        words = p.color if p.color != self.me else "You"
+                        text = font.render(words, True, p.color)
+                        text_rect = text.get_rect(center=(p.rect.centerx, p.rect.bottom + 15))
+
+                        # Outline the text in black
+                        outline_width = 2  # Adjust as needed
+                        for dx in range(-outline_width, outline_width + 1):
+                            for dy in range(-outline_width, outline_width + 1):
+                                if dx*dx + dy*dy <= outline_width*outline_width: # Draw only in a circle
+                                    outline_rect = text_rect.move(dx, dy)
+                                    outline = font.render(words, True, (0, 0, 0))  # Black outline
+                                    self.scaled_surface.blit(outline, outline_rect)
+
+                        # Draw the text in the player's color
+                        self.scaled_surface.blit(text, text_rect)
+
+            # Draw drag vector if dragging
+            if self.me and self.player_dict[self.me].dragging:
+                start_pos = self.player_dict[self.me].rect.center
+                end_pos = (
+                    start_pos[0] + self.player_dict[self.me].drag_vector[0],
+                    start_pos[1] + self.player_dict[self.me].drag_vector[1],
+                )
+                pygame.draw.line(self.scaled_surface, (0, 0, 255), start_pos, end_pos, 3)
+
+                # Draw arrowhead
+                angle = math.atan2(start_pos[1] - end_pos[1], start_pos[0] - end_pos[0])
+                arrow_length = 12
+                arrow_angle = math.pi / 4
+                left_arrow = (
+                    end_pos[0] + arrow_length * math.cos(angle + arrow_angle),
+                    end_pos[1] + arrow_length * math.sin(angle + arrow_angle),
+                )
+                right_arrow = (
+                    end_pos[0] + arrow_length * math.cos(angle - arrow_angle),
+                    end_pos[1] + arrow_length * math.sin(angle - arrow_angle),
+                )
+
+                pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, left_arrow, 3)
+                pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, right_arrow, 3)
+
+            current_time = pygame.time.get_ticks()
+
+            # Draw countdown if active
+            if self.countdown > 0:
+                # Create a semi-transparent overlay
+                overlay = pygame.Surface(
+                    (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT), pygame.SRCALPHA
+                )
+                overlay.fill((0, 0, 0, 128))
+                self.scaled_surface.blit(overlay, (0, 0))
+
+                # Render countdown text
+                countdown_text = self.font.render(
+                    str(self.countdown if self.countdown != 999 else ""),
+                    True,
+                    (255, 255, 255),
+                )
+                text_rect = countdown_text.get_rect(
+                    center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2)
+                )
+                self.scaled_surface.blit(countdown_text, text_rect)
+
+                ready_font = pygame.font.SysFont(constants.FONT_NAME, 70)
+                ready_text = ready_font.render("Get Ready!", True, (255, 255, 255))
+                ready_rect = ready_text.get_rect(
+                    center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 - 100)
+                )
+                self.scaled_surface.blit(ready_text, ready_rect)
+                
+                # Display scores at the bottom
+                score_font = pygame.font.SysFont(constants.FONT_NAME, 30)
+                y_offset = 0
+                x_offset = 0
+                count = 0
+                for color, player in self.player_dict.items():
+                    word = color if color != self.me else "You"
+                    score_text = score_font.render(f"{word}: {player.wins}", True, color)
+                    score_rect = score_text.get_rect(
+                        center=(
+                            constants.SCREEN_WIDTH // 5 + x_offset,
+                            constants.SCREEN_HEIGHT - 80 + y_offset,
+                        )
+                    )
 
                     # Outline the text in black
                     outline_width = 2  # Adjust as needed
                     for dx in range(-outline_width, outline_width + 1):
                         for dy in range(-outline_width, outline_width + 1):
                             if dx*dx + dy*dy <= outline_width*outline_width: # Draw only in a circle
-                                outline_rect = text_rect.move(dx, dy)
-                                outline = font.render(words, True, (0, 0, 0))  # Black outline
+                                outline_rect = score_rect.move(dx, dy)
+                                outline = score_font.render(f"{word}: {player.wins}", True, (0, 0, 0))  # Black outline
                                 self.scaled_surface.blit(outline, outline_rect)
 
-                    # Draw the text in the player's color
-                    self.scaled_surface.blit(text, text_rect)
+                    self.scaled_surface.blit(score_text, score_rect)
+                    x_offset += constants.SCREEN_WIDTH // 5  # Move to the next column
 
-        # Draw drag vector if dragging
-        if self.me and self.player_dict[self.me].dragging:
-            start_pos = self.player_dict[self.me].rect.center
-            end_pos = (
-                start_pos[0] + self.player_dict[self.me].drag_vector[0],
-                start_pos[1] + self.player_dict[self.me].drag_vector[1],
-            )
-            pygame.draw.line(self.scaled_surface, (0, 0, 255), start_pos, end_pos, 3)
+                    count += 1
+                    if count == 4:  # Move to the next row after 4 players
+                        y_offset = 40
+                        x_offset = 0
 
-            # Draw arrowhead
-            angle = math.atan2(start_pos[1] - end_pos[1], start_pos[0] - end_pos[0])
-            arrow_length = 12
-            arrow_angle = math.pi / 4
-            left_arrow = (
-                end_pos[0] + arrow_length * math.cos(angle + arrow_angle),
-                end_pos[1] + arrow_length * math.sin(angle + arrow_angle),
-            )
-            right_arrow = (
-                end_pos[0] + arrow_length * math.cos(angle - arrow_angle),
-                end_pos[1] + arrow_length * math.sin(angle - arrow_angle),
-            )
-
-            pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, left_arrow, 3)
-            pygame.draw.line(self.scaled_surface, (0, 0, 255), end_pos, right_arrow, 3)
-
-        current_time = pygame.time.get_ticks()
-
-        # Draw countdown if active
-        if self.countdown > 0:
-            # Create a semi-transparent overlay
-            overlay = pygame.Surface(
-                (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT), pygame.SRCALPHA
-            )
-            overlay.fill((0, 0, 0, 128))
-            self.scaled_surface.blit(overlay, (0, 0))
-
-            # Render countdown text
-            countdown_text = self.font.render(
-                str(self.countdown if self.countdown != 999 else ""),
-                True,
-                (255, 255, 255),
-            )
-            text_rect = countdown_text.get_rect(
-                center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2)
-            )
-            self.scaled_surface.blit(countdown_text, text_rect)
-
-            ready_font = pygame.font.SysFont(constants.FONT_NAME, 70)
-            ready_text = ready_font.render("Get Ready!", True, (255, 255, 255))
-            ready_rect = ready_text.get_rect(
-                center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 - 100)
-            )
-            self.scaled_surface.blit(ready_text, ready_rect)
-            
-            # Display scores at the bottom
-            score_font = pygame.font.SysFont(constants.FONT_NAME, 30)
-            y_offset = 0
-            x_offset = 0
-            count = 0
-            for color, player in self.player_dict.items():
-                word = color if color != self.me else "You"
-                score_text = score_font.render(f"{word}: {player.wins}", True, color)
-                score_rect = score_text.get_rect(
-                    center=(
-                        constants.SCREEN_WIDTH // 5 + x_offset,
-                        constants.SCREEN_HEIGHT - 80 + y_offset,
+            elif self.countdown == 0 and self.go_timer > 0:
+                if current_time - self.go_timer < 1000:
+                    go_text = self.font.render("GO!", True, (0, 151, 0))
+                    go_rect = go_text.get_rect(
+                        center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2)
                     )
-                )
-
-                # Outline the text in black
-                outline_width = 2  # Adjust as needed
-                for dx in range(-outline_width, outline_width + 1):
-                    for dy in range(-outline_width, outline_width + 1):
-                        if dx*dx + dy*dy <= outline_width*outline_width: # Draw only in a circle
-                            outline_rect = score_rect.move(dx, dy)
-                            outline = score_font.render(f"{word}: {player.wins}", True, (0, 0, 0))  # Black outline
-                            self.scaled_surface.blit(outline, outline_rect)
-
-                self.scaled_surface.blit(score_text, score_rect)
-                x_offset += constants.SCREEN_WIDTH // 5  # Move to the next column
-
-                count += 1
-                if count == 4:  # Move to the next row after 4 players
-                    y_offset = 40
-                    x_offset = 0
-
-        elif self.countdown == 0 and self.go_timer > 0:
-            if current_time - self.go_timer < 1000:
-                go_text = self.font.render("GO!", True, (0, 151, 0))
-                go_rect = go_text.get_rect(
-                    center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2)
-                )
-                self.scaled_surface.blit(go_text, go_rect)
-            else:
-                self.go_timer = 0
+                    self.scaled_surface.blit(go_text, go_rect)
+                else:
+                    self.go_timer = 0
 
         # Scale the internal surface to fit the window using nearest-neighbor scaling
         scaled_surface = pygame.transform.scale(self.scaled_surface, self.window_size)
@@ -664,6 +690,15 @@ class GameClient:
 
         # Main loop
         while self.running:
+            current_time = pygame.time.get_ticks()
+
+            # Check if a winner is set AND the timer was started
+            if self.winner is not None and self.winner_display_start_time is not None:
+                # Check if 3000 milliseconds (3 seconds) have passed
+                if current_time - self.winner_display_start_time >= 3000:
+                    self.winner = None  
+                    self.winner_display_start_time = None 
+                    
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
