@@ -204,7 +204,8 @@ class GameClient:
 
                 # Receive confirmation from server
                 try:
-                    response = self.receive_message(conn)
+                    server_response = self.receive_message(conn)
+                    response = msgpack.unpackb(server_response)
                     if response == "DISCONNECTED":
                         print("Successfully disconnected from server")
                     else:

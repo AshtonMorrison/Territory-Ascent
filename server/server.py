@@ -161,7 +161,6 @@ class GameServer:
         player = Player(color, location, self.tile_size, self.tile_size)
         player.conn = conn  # Store connection for broadcasting
         player.addr = addr  # Store address
-        player.ready = False  # Set initial ready state
 
         with self.lock:
             self.sprite_groups["waiting-players"].add(player)
@@ -187,7 +186,6 @@ class GameServer:
 
                     # Handle ready input
                     elif player_data["type"] == "READY":
-                        player.ready = True  # Mark player as ready
                         if player not in self.ready:  # Avoid duplicate entries
                             self.ready.append(player)
 
@@ -224,8 +222,8 @@ class GameServer:
                     self.sprite_groups["players"].remove(player)
                 elif player in self.sprite_groups["waiting-players"]:
                     self.sprite_groups["waiting-players"].remove(player)
-                    self.waiting_room_locations.append(location)
-                    self.used_waiting_room_locations.remove(location)
+                    self.waiting_room_locations.append(player.rect.bottomleft)
+                    self.used_waiting_room_locations.remove(player.rect.bottomleft)
             print(f"Client {addr} disconnected.")
 
     def get_player_state(self, waiting=False):
@@ -504,9 +502,7 @@ class GameServer:
                 should_start_game = False
                 with self.lock:
 
-                    if self.sprite_groups["waiting-players"] and all(
-                        player.ready for player in self.sprite_groups["waiting-players"]
-                    ):
+                    if self.sprite_groups["waiting-players"] and len(self.sprite_groups["waiting-players"]) == len(self.ready):
                         print("All players are ready!")
                         should_start_game = True
 

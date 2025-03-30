@@ -5,39 +5,25 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, color, x, y, width, height, in_air):
         super().__init__()
 
-        # Create the image with the player color
         self.color = color
-        self.image = pygame.Surface([width, height])
-
-        # Fill the player image with the given color
-        self.image.fill(self.color)
-
-        # Add black border around the player (outline)
-        border_thickness = 2  # Adjust border thickness as needed
         border_color = (0, 0, 0)  # Black border
+        border_thickness = 1
 
-        # Drawing the border: Inflate the player's rect to draw the border
-        border_rect = self.image.get_rect().inflate(
-            border_thickness * 2, border_thickness * 2
-        )
+        self.image = pygame.Surface([width, height])
+        self.image.fill(border_color)
 
-        # Fill the surface with border color before drawing the actual player sprite
-        border_surface = pygame.Surface(
-            [width + border_thickness * 2, height + border_thickness * 2]
-        )
-        border_surface.fill(border_color)
-        border_rect.topleft = (
-            -border_thickness,
-            -border_thickness,
-        )  # Position the border correctly
+        inner_width = width - (2 * border_thickness)
+        inner_height = height - (2 * border_thickness)
+        inner_x = border_thickness
+        inner_y = border_thickness
 
-        # Add the player image inside the border surface
-        border_surface.blit(self.image, (border_thickness, border_thickness))
+        inner_rect = pygame.Rect(inner_x, inner_y, inner_width, inner_height)
+        pygame.draw.rect(self.image, self.color, inner_rect)
 
-        # Update the image and rect
-        self.image = border_surface
+
+        # Rect
         self.rect = self.image.get_rect()
-        self.rect.topleft = (x, y)
+        self.rect.bottomleft = (x, y)
 
         # Jumping
         self.dragging = False
