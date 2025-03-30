@@ -2,11 +2,9 @@ import pygame
 import pygame.freetype
 import subprocess
 import sys
-import socket
-import base64
 import os
 from server.server import get_ipv4, encode_ip
-import threading
+from shared import constants
 
 
 class TextInput:
@@ -16,7 +14,7 @@ class TextInput:
         self.active = False
         self.inactive_color = pygame.Color("lightskyblue3")
         self.active_color = pygame.Color("dodgerblue2")
-        self.font = pygame.font.Font(None, 32)
+        self.font = pygame.font.SysFont(constants.FONT_NAME, 28)
         self.cursor_visible = True
         self.cursor_timer = 0
         self.cursor_blink_speed = 500  
@@ -73,7 +71,7 @@ class Button:
     def __init__(self, x, y, width, height, text):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
-        self.font = pygame.font.Font(None, 32)
+        self.font = pygame.font.SysFont(constants.FONT_NAME, 28)
         self.color = pygame.Color("lightskyblue3")
         self.hover = False
 
@@ -111,8 +109,8 @@ def main():
     screen = pygame.display.set_mode((500, 400))
     pygame.display.set_caption("Launcher")
 
-    title_font = pygame.font.Font(None, 40)
-    label_font = pygame.font.Font(None, 28)
+    title_font = pygame.font.SysFont(constants.FONT_NAME, 35)
+    label_font = pygame.font.SysFont(constants.FONT_NAME, 25)
 
     text_input = TextInput(75, 140, 350, 40)
     server_button = Button(75, 210, 350, 40, "Start Server")
@@ -182,6 +180,8 @@ def main():
                 elif connect_button.rect.collidepoint(event.pos):
                     if text_input.text:
                         client_process = run_client(text_input.text)
+                    if server_code is not None:
+                        client_process = run_client(server_code)
 
                 elif instructions_button.rect.collidepoint(event.pos):
                     show_instructions = True
@@ -244,7 +244,7 @@ def main():
                 )
                 screen.blit(code_label, code_label_rect)
 
-                code_font = pygame.font.Font(None, 36)
+                code_font = pygame.font.SysFont(constants.FONT_NAME, 30)
                 code_surface = code_font.render(server_code, True, (255, 255, 100))
                 code_rect = code_surface.get_rect(
                     centerx=screen.get_width() // 2, y=130
