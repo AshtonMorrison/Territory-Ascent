@@ -405,9 +405,11 @@ class GameServer:
         # Move all players back to waiting room
         with self.lock:
             for player in self.sprite_groups["players"]:
+                player.wins = 0
                 self.sprite_groups["waiting-players"].add(player)
                 player.reset_position(self.get_waiting_room_location())
             self.sprite_groups["players"].empty()
+
 
     def start_game(self):
         """Starts the game from the waiting room."""
@@ -422,9 +424,6 @@ class GameServer:
         # Call reset_round to start the game
         self.reset_round()
 
-        # Clear ready list
-        self.ready = []
-
     def reset_round(self):
         """Resets the game state for a new round."""
 
@@ -437,13 +436,15 @@ class GameServer:
         self.current_map = random.choice(self.game_maps)
         self.create_tile_map(self.current_map["map"])
 
-        # Let waiting room into game if they ready up
+        # Move ready players from waiting room to game
         with self.lock:
-            players = list(self.sprite_groups["waiting-players"])
-            for player in players:
-                if player in self.ready:
-                    self.sprite_groups["players"].add(player)
-                    self.sprite_groups["waiting-players"].remove(player)
+            players_to_move = [player for player in self.sprite_groups["waiting-players"] if player in self.ready]
+
+        for player in players_to_move: 
+            with self.lock:
+                self.sprite_groups["players"].add(player)
+                self.sprite_groups["waiting-players"].remove(player)
+
 
         # Reset player positions
         with self.lock:
@@ -458,6 +459,7 @@ class GameServer:
             "type": "NEW GAME",
             "Players": self.get_player_state(),
             "TileMap": self.tile_data,
+            "PlayerWins": {player.color: player.wins for player in self.sprite_groups["players"]},
         }
         message = msgpack.packb(new_state)
         length_message = len(message).to_bytes(4, byteorder="big")
@@ -469,6 +471,9 @@ class GameServer:
                     print(f"Failed to send to {player.addr}")
                     player.conn.close()
                     self.sprite_groups["players"].remove(player)
+
+        # Clear ready list
+        self.ready = []
 
         # Start countdown
         self.countdown()
@@ -508,16 +513,18 @@ class GameServer:
                 if should_start_game:
                     self.start_game()
 
-                self.broadcast()
+                if self.sprite_groups["waiting-players"]:
+                    self.broadcast()
 
                 # Maintain 45 FPS
                 self.clock.tick(constants.FPS)
 
             while self.game_running:
-                # Update all players
+
+                end_game = False
                 with self.lock:
                     if not self.sprite_groups["players"]:
-                        self.game_over()
+                        end_game = True
 
                     for player in self.sprite_groups["players"]:
                         reached_goal = player.update(
@@ -543,6 +550,9 @@ class GameServer:
 
                 # Clear changed tiles
                 self.changed_tiles = []
+
+                if end_game:
+                    self.game_over()
 
                 # Check to reset round if winner
                 if self.winner is not None:

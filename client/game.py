@@ -337,7 +337,6 @@ class GameClient:
 
                     elif update_data["type"] == "ROUND OVER":
                         winner = update_data["winner"]
-                        self.player_dict[winner].wins += 1
                         print(f"Round Over! {winner} got the point!")
 
                     elif update_data["type"] == "GAME OVER":
@@ -363,19 +362,23 @@ class GameClient:
                             current_player_colors = set(self.player_dict.keys())
                         updated_player_colors = set()
 
+                        wins_dict= update_data["PlayerWins"]
+
                         for player_info in player_data:
                             color = player_info["color"]
                             x = player_info["x"]
                             y = player_info["y"]
                             in_air = player_info["in_air"]
+                            wins = wins_dict[color]
                             updated_player_colors.add(color)
 
                             with self.lock:
                                 if color in self.player_dict:
                                     self.player_dict[color].update(x, y, in_air)
-
                                 else:
                                     self.create_player(color, x, y, in_air)
+
+                                self.player_dict[color].wins = wins
 
                         # Remove players that have disconnected
                         for color in current_player_colors - updated_player_colors:
@@ -386,6 +389,7 @@ class GameClient:
                         tile_data = update_data["TileMap"]
                         self.create_tile_map(tile_data)
 
+                        
                     elif update_data["type"] == "STATE":
                         # Update player locations
                         player_data = update_data["players"]
@@ -521,11 +525,12 @@ class GameClient:
         with self.lock:
             for p in self.player_dict.values():
                 self.scaled_surface.blit(p.image, p.rect)
+
                 if self.waiting:
                     font = pygame.font.SysFont(constants.FONT_NAME, 20)
                     words = p.color if p.color != self.me else "You"
                     text = font.render(words, True, p.color)
-                    text_rect = text.get_rect(center=(p.rect.centerx, p.rect.bottom + 10))
+                    text_rect = text.get_rect(center=(p.rect.centerx, p.rect.bottom + 15))
 
                     # Outline the text in black
                     outline_width = 2  # Adjust as needed
@@ -599,8 +604,8 @@ class GameClient:
             x_offset = 0
             count = 0
             for color, player in self.player_dict.items():
-                color == "You" if color == self.me else color
-                score_text = score_font.render(f"{color}: {player.wins}", True, color)
+                word = color if color != self.me else "You"
+                score_text = score_font.render(f"{word}: {player.wins}", True, color)
                 score_rect = score_text.get_rect(
                     center=(
                         constants.SCREEN_WIDTH // 5 + x_offset,
@@ -614,7 +619,7 @@ class GameClient:
                     for dy in range(-outline_width, outline_width + 1):
                         if dx*dx + dy*dy <= outline_width*outline_width: # Draw only in a circle
                             outline_rect = score_rect.move(dx, dy)
-                            outline = score_font.render(f"{color}: {player.wins}", True, (0, 0, 0))  # Black outline
+                            outline = score_font.render(f"{word}: {player.wins}", True, (0, 0, 0))  # Black outline
                             self.scaled_surface.blit(outline, outline_rect)
 
                 self.scaled_surface.blit(score_text, score_rect)
