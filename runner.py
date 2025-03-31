@@ -1,11 +1,11 @@
 import pygame
-import pygame.freetype # Keep the import in case original code used it implicitly
+import pygame.freetype  # Keep the import in case original code used it implicitly
 import subprocess
 import sys
 import os
 import multiprocessing
 import signal  # Import signal handling module
-import time    # Import time for sleep/timeouts
+import time  # Import time for sleep/timeouts
 
 # Assuming these imports work correctly relative to runner.py's location
 try:
@@ -19,6 +19,7 @@ except ImportError as e:
 
 # --- Original UI Classes (TextInput, Button) ---
 
+
 class TextInput:
     def __init__(self, x, y, width, height):
         self.rect = pygame.Rect(x, y, width, height)
@@ -30,7 +31,7 @@ class TextInput:
         self.font = pygame.font.SysFont(constants.FONT_NAME, 28)
         self.cursor_visible = True
         self.cursor_timer = 0
-        self.cursor_blink_speed = 500 # ms
+        self.cursor_blink_speed = 500  # ms
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -49,7 +50,7 @@ class TextInput:
             elif event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
             # Original check for adding text
-            elif event.unicode.isprintable(): # Filter non-printable keys
+            elif event.unicode.isprintable():  # Filter non-printable keys
                 self.text += event.unicode
             # Reset cursor on keypress
             self.cursor_visible = True
@@ -68,7 +69,7 @@ class TextInput:
 
     def draw(self, screen):
         color = self.active_color if self.active else self.inactive_color
-        pygame.draw.rect(screen, color, self.rect, 2) # Original border width
+        pygame.draw.rect(screen, color, self.rect, 2)  # Original border width
 
         # Original text rendering
         text_surface = self.font.render(self.text, True, (255, 255, 255))
@@ -84,8 +85,11 @@ class TextInput:
             # cursor_pos_x = min(cursor_pos_x, self.rect.right - 5)
             cursor_height = self.font.get_height()
             cursor_rect = pygame.Rect(
-                cursor_pos_x, self.rect.y + (self.rect.height - cursor_height) // 2, # Center vertically
-                2, cursor_height
+                cursor_pos_x,
+                self.rect.y
+                + (self.rect.height - cursor_height) // 2,  # Center vertically
+                2,
+                cursor_height,
             )
             pygame.draw.rect(screen, (255, 255, 255), cursor_rect)
 
@@ -97,8 +101,10 @@ class Button:
         # Original font definition
         self.font = pygame.font.SysFont(constants.FONT_NAME, 28)
         self.color = pygame.Color("lightskyblue3")
-        self.hover_color = pygame.Color("dodgerblue2") # Added hover color from original logic
-        self.text_color = (255, 255, 255) # Assuming white text
+        self.hover_color = pygame.Color(
+            "dodgerblue2"
+        )  # Added hover color from original logic
+        self.text_color = (255, 255, 255)  # Assuming white text
         self.hover = False
 
     def update(self, mouse_pos):
@@ -107,7 +113,7 @@ class Button:
     def draw(self, screen):
         # Original color logic based on hover state
         color = self.hover_color if self.hover else self.color
-        pygame.draw.rect(screen, color, self.rect, 2) # Original border width
+        pygame.draw.rect(screen, color, self.rect, 2)  # Original border width
 
         # Original text rendering and centering
         text_surface = self.font.render(self.text, True, self.text_color)
@@ -117,24 +123,30 @@ class Button:
 
 # --- Process Entry Points (Unchanged logic, no naming) ---
 
+
 def server_process_entry(stop_event=None):
     """Entry point for server process"""
-    print(f"[Server Process {os.getpid()}] Starting...") # Keep logs for debugging
+    print(f"[Server Process {os.getpid()}] Starting...")  # Keep logs for debugging
     from server.server import GameServer
+
     server = GameServer()
 
     if stop_event:
+
         def monitor_stop():
-            stop_event.wait() # Block until event is set
-            print(f"[Server Process {os.getpid()}] Stop event received, signaling shutdown.")
-            server.running = False # Signal the server's main loop to stop
+            stop_event.wait()  # Block until event is set
+            print(
+                f"[Server Process {os.getpid()}] Stop event received, signaling shutdown."
+            )
+            server.running = False  # Signal the server's main loop to stop
 
         import threading
+
         monitor = threading.Thread(target=monitor_stop, daemon=True)
         monitor.start()
 
     try:
-        server.start() # Assumes this loop checks server.running
+        server.start()  # Assumes this loop checks server.running
     except Exception as e:
         print(f"[Server Process {os.getpid()}] Error: {e}")
     finally:
@@ -143,22 +155,27 @@ def server_process_entry(stop_event=None):
 
 def client_process_entry(code, stop_event=None):
     """Entry point for client process"""
-    print(f"[Client Process {os.getpid()}] Starting with code: {code}") # Keep logs
+    print(f"[Client Process {os.getpid()}] Starting with code: {code}")  # Keep logs
     from client.game import GameClient
+
     client = GameClient(code)
 
     if stop_event:
+
         def monitor_stop():
             stop_event.wait()
-            print(f"[Client Process {os.getpid()}] Stop event received, signaling shutdown.")
-            client.running = False # Signal the client's main loop to stop
+            print(
+                f"[Client Process {os.getpid()}] Stop event received, signaling shutdown."
+            )
+            client.running = False  # Signal the client's main loop to stop
 
         import threading
+
         monitor = threading.Thread(target=monitor_stop, daemon=True)
         monitor.start()
 
     try:
-        client.run() # Assumes this loop checks client.running
+        client.run()  # Assumes this loop checks client.running
     except Exception as e:
         print(f"[Client Process {os.getpid()}] Error: {e}")
     finally:
@@ -166,6 +183,7 @@ def client_process_entry(code, stop_event=None):
 
 
 # --- Process Management (Improved logic) ---
+
 
 def run_server():
     """Start the server using the appropriate method."""
@@ -187,9 +205,11 @@ def run_server():
             # Use Popen for non-blocking execution
             process = subprocess.Popen(cmd, cwd=base_path)
             print(f"Server process ({process.pid}) started via subprocess.")
-            return process, None # No stop event for subprocess
+            return process, None  # No stop event for subprocess
         except FileNotFoundError:
-            print(f"Error: Could not find server.server module. Command: {' '.join(cmd)}")
+            print(
+                f"Error: Could not find server.server module. Command: {' '.join(cmd)}"
+            )
             return None, None
         except Exception as e:
             print(f"Error starting server subprocess: {e}")
@@ -206,7 +226,12 @@ def run_client(code):
         print(f"Starting client for code {code} using multiprocessing...")
         stop_event = multiprocessing.Event()
         process = multiprocessing.Process(
-            target=client_process_entry, args=(code, stop_event,), daemon=True
+            target=client_process_entry,
+            args=(
+                code,
+                stop_event,
+            ),
+            daemon=True,
         )
         process.start()
         print(f"Client process ({process.pid}) started via multiprocessing.")
@@ -218,10 +243,10 @@ def run_client(code):
         try:
             process = subprocess.Popen(cmd, cwd=base_path)
             print(f"Client process ({process.pid}) started via subprocess.")
-            return process, None # No stop event for subprocess
+            return process, None  # No stop event for subprocess
         except FileNotFoundError:
-             print(f"Error: Could not find client.game module. Command: {' '.join(cmd)}")
-             return None, None
+            print(f"Error: Could not find client.game module. Command: {' '.join(cmd)}")
+            return None, None
         except Exception as e:
             print(f"Error starting client subprocess: {e}")
             return None, None
@@ -233,83 +258,125 @@ def is_process_running(process):
         return False
     try:
         if isinstance(process, multiprocessing.Process):
-            # Check if the process object itself exists and is alive
+            # Additional check for exitcode to handle already terminated processes
+            if process.exitcode is not None:
+                return False
             return process.is_alive()
         elif isinstance(process, subprocess.Popen):
             # Check if the subprocess has terminated
             return process.poll() is None
     except Exception as e:
         # Can happen if process handle becomes invalid after termination
-        # print(f"Error checking process status: {e}") # Optional debug log
+        print(
+            f"Warning: Error checking process status: {e}"
+        )  # Make visible for debugging
         return False
-    return False # Should not be reached if process is valid object
+    return False  # Should not be reached if process is valid object
 
-
-# --- Cleanup Logic (Improved logic) ---
 
 def cleanup_processes(server_proc, server_evt, client_proc, client_evt):
     """Attempt graceful shutdown of child processes."""
     print("Initiating cleanup...")
     processes_to_wait_gracefully = []
 
-    # 1. Signal multiprocessing processes to stop via event
-    if client_proc and client_evt and isinstance(client_proc, multiprocessing.Process):
+    # 1. Before signaling, verify which processes are actually still running
+    actually_running_client = client_proc and is_process_running(client_proc)
+    actually_running_server = server_proc and is_process_running(server_proc)
+
+    # 2. Only signal processes that are confirmed to be running
+    if (
+        actually_running_client
+        and client_evt
+        and isinstance(client_proc, multiprocessing.Process)
+    ):
         print(f"Signaling client process ({client_proc.pid}) via event...")
         try:
             client_evt.set()
             processes_to_wait_gracefully.append(("Client", client_proc))
         except Exception as e:
-            print(f"Error setting client stop event: {e}") # Log error but continue
+            print(f"Error setting client stop event: {e}")
+    elif client_proc:
+        print(
+            f"Client process ({getattr(client_proc, 'pid', 'unknown')}) already exited, skipping signal."
+        )
 
-    if server_proc and server_evt and isinstance(server_proc, multiprocessing.Process):
+    if (
+        actually_running_server
+        and server_evt
+        and isinstance(server_proc, multiprocessing.Process)
+    ):
         print(f"Signaling server process ({server_proc.pid}) via event...")
         try:
             server_evt.set()
             processes_to_wait_gracefully.append(("Server", server_proc))
         except Exception as e:
             print(f"Error setting server stop event: {e}")
+    elif server_proc:
+        print(
+            f"Server process ({getattr(server_proc, 'pid', 'unknown')}) already exited, skipping signal."
+        )
 
-    # 2. Wait for multiprocessing processes to join (graceful shutdown timeout)
-    graceful_shutdown_timeout = 2.0 # seconds to wait for clean exit
-    start_wait = time.time()
+    # 3. Wait with a shorter timeout for processes we signaled
+    if processes_to_wait_gracefully:
+        graceful_shutdown_timeout = 1.0  # Reduced from 2.0 seconds
+        start_wait = time.time()
 
-    for name, proc in processes_to_wait_gracefully:
-        if is_process_running(proc): # Check if it didn't already die
-            print(f"Waiting up to {graceful_shutdown_timeout:.1f}s for {name} ({proc.pid}) to join...")
-            join_timeout = max(0.1, graceful_shutdown_timeout - (time.time() - start_wait))
-            try:
-                proc.join(timeout=join_timeout)
-                if proc.is_alive():
-                    print(f"{name} ({proc.pid}) did not exit gracefully after event.")
-                else:
-                     print(f"{name} ({proc.pid}) joined successfully.")
-            except Exception as e:
-                 print(f"Error joining {name} process ({proc.pid}): {e}")
+        for name, proc in processes_to_wait_gracefully:
+            # Double-check if still running before waiting
+            if is_process_running(proc):
+                print(
+                    f"Waiting up to {graceful_shutdown_timeout:.1f}s for {name} ({proc.pid}) to join..."
+                )
+                # Calculate remaining time with a minimum
+                join_timeout = max(
+                    0.1, graceful_shutdown_timeout - (time.time() - start_wait)
+                )
+                try:
+                    proc.join(timeout=join_timeout)
+                    if is_process_running(proc):  # Check again after the join attempt
+                        print(
+                            f"{name} ({proc.pid}) did not exit within timeout, will be terminated."
+                        )
+                    else:
+                        print(f"{name} ({proc.pid}) joined successfully.")
+                except Exception as e:
+                    print(f"Error joining {name} process ({proc.pid}): {e}")
+            else:
+                print(f"{name} process exited before join, continuing cleanup.")
+    else:
+        print("No processes need graceful shutdown.")
 
-
-    # 3. Terminate any remaining processes (multiprocessing or subprocess)
+    # 4. Terminate any remaining processes
     print("Checking for processes needing termination...")
     processes_to_terminate = []
-    if is_process_running(client_proc):
-        processes_to_terminate.append(("Client", client_proc))
-    if is_process_running(server_proc):
-        # Avoid double-adding if it was already in the list but failed join
-        if ("Server", server_proc) not in [(n,p) for n, p in processes_to_wait_gracefully if p == server_proc]:
-             processes_to_terminate.append(("Server", server_proc))
 
+    # Recheck process status before termination
+    if client_proc and is_process_running(client_proc):
+        processes_to_terminate.append(("Client", client_proc))
+    if server_proc and is_process_running(server_proc):
+        processes_to_terminate.append(("Server", server_proc))
 
     if processes_to_terminate:
         for name, proc in processes_to_terminate:
             print(f"Terminating {name} ({proc.pid})...")
             try:
                 proc.terminate()
-                # Short wait after terminate for OS cleanup (optional)
+                # Very short wait after terminate
                 if isinstance(proc, multiprocessing.Process):
-                    proc.join(timeout=0.5) # Short join after terminate
+                    proc.join(timeout=0.2)  # Shorter timeout after terminate
                 elif isinstance(proc, subprocess.Popen):
-                    proc.wait(timeout=0.5) # Wait for subprocess after terminate
-            except (ProcessLookupError, subprocess.TimeoutExpired, AttributeError):
-                pass # Process already gone or didn't die quickly/error during access
+                    try:
+                        proc.wait(timeout=0.2)  # Shorter timeout for subprocess
+                    except subprocess.TimeoutExpired:
+                        print(
+                            f"{name} process did not respond to terminate, attempting kill..."
+                        )
+                        if hasattr(proc, "kill"):
+                            proc.kill()  # Force kill if still running
+            except (ProcessLookupError, subprocess.TimeoutExpired, AttributeError) as e:
+                print(
+                    f"Note: {type(e).__name__} while terminating {name} - process may already be gone"
+                )
             except Exception as e:
                 print(f"Error during termination of {name} ({proc.pid}): {e}")
     else:
@@ -319,6 +386,7 @@ def cleanup_processes(server_proc, server_evt, client_proc, client_evt):
 
 
 # --- Main Function (Original UI layout, improved process handling) ---
+
 
 def main():
     # --- Multiprocessing setup for frozen apps ---
@@ -339,19 +407,20 @@ def main():
     if not pygame.font.get_init():
         pygame.font.init()
     # If freetype was used anywhere (even implicitly by SysFont sometimes)
-    if 'pygame.freetype' in sys.modules and not pygame.freetype.get_init():
-         try:
+    if "pygame.freetype" in sys.modules and not pygame.freetype.get_init():
+        try:
             pygame.freetype.init()
-         except Exception: # Handle cases where freetype might not be available/init fails
+        except (
+            Exception
+        ):  # Handle cases where freetype might not be available/init fails
             print("Pygame freetype init failed.")
-
 
     # Original screen dimensions and caption
     screen_width = 500
     screen_height = 400
     screen = pygame.display.set_mode((screen_width, screen_height))
-    pygame.display.set_caption("Launcher") # Original caption
-    clock = pygame.time.Clock() # For potential frame rate limiting
+    pygame.display.set_caption("Launcher")  # Original caption
+    clock = pygame.time.Clock()  # For potential frame rate limiting
 
     # Original font definitions
     title_font = pygame.font.SysFont(constants.FONT_NAME, 35)
@@ -367,11 +436,11 @@ def main():
     # Process tracking variables
     server_process = None
     client_process = None
-    server_stop_event = None # Only used for multiprocessing
-    client_stop_event = None # Only used for multiprocessing
-    server_code = None # Store the code when server is started by launcher
+    server_stop_event = None  # Only used for multiprocessing
+    client_stop_event = None  # Only used for multiprocessing
+    server_code = None  # Store the code when server is started by launcher
     last_process_check_time = 0
-    process_check_interval = 1500 # Check every 1.5 seconds
+    process_check_interval = 1500  # Check every 1.5 seconds
 
     # Original instructions state and text
     show_instructions = False
@@ -391,10 +460,11 @@ def main():
 
     # --- Signal Handling Setup ---
     running = True
+
     def handle_exit_signal(sig, frame):
         nonlocal running
         print(f"Received signal {sig}, initiating shutdown...")
-        running = False # Trigger normal exit from the main loop
+        running = False  # Trigger normal exit from the main loop
 
     # Catch Ctrl+C and termination signals to allow graceful cleanup
     signal.signal(signal.SIGINT, handle_exit_signal)
@@ -415,7 +485,7 @@ def main():
                 # Original instruction closing logic
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     show_instructions = False
-                continue # Skip other UI interaction when instructions are shown
+                continue  # Skip other UI interaction when instructions are shown
 
             # Handle text input field events
             result = text_input.handle_event(event)
@@ -423,7 +493,7 @@ def main():
             # connection was tied to button clicks. Keep that behavior.
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1: # Left click
+                if event.button == 1:  # Left click
                     if server_button.rect.collidepoint(event.pos):
                         # Original logic: Start server and client only if server isn't running
                         if not is_process_running(server_process):
@@ -432,7 +502,7 @@ def main():
                             if server_process:
                                 # Original: Wait briefly, get code, start client
                                 print("Waiting briefly for server to initialize...")
-                                pygame.time.wait(1000) # Original wait time
+                                pygame.time.wait(1000)  # Original wait time
                                 try:
                                     ipv4 = get_ipv4()
                                     if ipv4:
@@ -441,35 +511,45 @@ def main():
                                         # Start client automatically ONLY if not already running
                                         if not is_process_running(client_process):
                                             print("Automatically starting client...")
-                                            client_process, client_stop_event = run_client(server_code)
+                                            client_process, client_stop_event = (
+                                                run_client(server_code)
+                                            )
                                         else:
-                                             print("Client already running, not starting another.")
+                                            print(
+                                                "Client already running, not starting another."
+                                            )
                                     else:
-                                        print("Could not determine server IP after starting.")
+                                        print(
+                                            "Could not determine server IP after starting."
+                                        )
                                         # Consider stopping the server if IP failed? Optional.
                                         # cleanup_processes(server_process, server_stop_event, None, None)
                                         # server_process, server_stop_event = None, None
                                 except Exception as e:
-                                     print(f"Error getting/encoding IP: {e}")
-                                     # Maybe cleanup server process here too?
+                                    print(f"Error getting/encoding IP: {e}")
+                                    # Maybe cleanup server process here too?
                             else:
                                 print("Failed to start server process.")
                         else:
-                            print("Server is already running.") # Button shouldn't be shown, but safety check
+                            print(
+                                "Server is already running."
+                            )  # Button shouldn't be shown, but safety check
 
                     elif connect_button.rect.collidepoint(event.pos):
                         print("Connect button clicked.")
-                        code_to_use = text_input.text.strip() # Use entered text
+                        code_to_use = text_input.text.strip()  # Use entered text
 
                         # Original logic: Connect using entered code OR existing server code if input is empty
                         if not code_to_use and server_code:
-                             print("Input field empty, using own server code.")
-                             code_to_use = server_code
+                            print("Input field empty, using own server code.")
+                            code_to_use = server_code
 
                         if code_to_use:
                             if not is_process_running(client_process):
                                 print(f"Attempting to connect with code: {code_to_use}")
-                                client_process, client_stop_event = run_client(code_to_use)
+                                client_process, client_stop_event = run_client(
+                                    code_to_use
+                                )
                             else:
                                 print("Client is already running.")
                         else:
@@ -496,22 +576,26 @@ def main():
             if server_process and not server_was_running:
                 print("Detected server process has stopped unexpectedly.")
                 server_process = None
-                server_code = None # Clear the code display
-                server_stop_event = None # Clear the event handle
+                server_code = None  # Clear the code display
+                server_stop_event = None  # Clear the event handle
                 # Don't kill client - let it handle disconnect
 
             if client_process and not client_was_running:
                 print("Detected client process has stopped unexpectedly.")
                 client_process = None
-                client_stop_event = None # Clear the event handle
+                client_stop_event = None  # Clear the event handle
 
             # Only update check time if checks were actually performed
-            if server_was_running or client_was_running or server_process or client_process:
-                 last_process_check_time = current_time
-
+            if (
+                server_was_running
+                or client_was_running
+                or server_process
+                or client_process
+            ):
+                last_process_check_time = current_time
 
         # --- Drawing (Original Logic) ---
-        screen.fill((20, 20, 30)) # Original background
+        screen.fill((20, 20, 30))  # Original background
 
         # Draw Title (Original)
         title_surface = title_font.render("Territory Ascent", True, (255, 255, 255))
@@ -521,16 +605,20 @@ def main():
         if show_instructions:
             # --- Draw Instructions Panel (Original) ---
             # Create a semi-transparent overlay or a distinct panel
-            instruction_panel = pygame.Surface((450, 320), pygame.SRCALPHA) # Use SRCALPHA for potential transparency
-            instruction_panel.fill((40, 40, 60, 230)) # Darker, semi-transparent background
+            instruction_panel = pygame.Surface(
+                (450, 320), pygame.SRCALPHA
+            )  # Use SRCALPHA for potential transparency
+            instruction_panel.fill(
+                (40, 40, 60, 230)
+            )  # Darker, semi-transparent background
 
             # Draw border (optional, but nice)
             pygame.draw.rect(
                 instruction_panel,
-                (100, 100, 180, 255), # Opaque border color
-                instruction_panel.get_rect(), # Use panel's rect
-                2, # Border width
-                border_radius=5 # Rounded corners
+                (100, 100, 180, 255),  # Opaque border color
+                instruction_panel.get_rect(),  # Use panel's rect
+                2,  # Border width
+                border_radius=5,  # Rounded corners
             )
 
             # Center the panel on the screen
@@ -540,39 +628,38 @@ def main():
             screen.blit(instruction_panel, panel_rect)
 
             # Draw instructions text (Original formatting and positioning)
-            y_offset = panel_rect.top + 20 # Start drawing text inside the panel
+            y_offset = panel_rect.top + 20  # Start drawing text inside the panel
             line_height_map = {
-                "How to Play Territory Ascent:": 35, # Larger title font needs more space
-                "Movement Controls:": 28, # Header font
-                "Game Objective:": 28, # Header font
-                "": 10, # Blank line spacing
-                "default": 22 # Default line spacing
+                "How to Play Territory Ascent:": 35,  # Larger title font needs more space
+                "Movement Controls:": 28,  # Header font
+                "Game Objective:": 28,  # Header font
+                "": 10,  # Blank line spacing
+                "default": 22,  # Default line spacing
             }
             for i, line in enumerate(instructions_text):
-                font_to_use = label_font # Default font
-                color = (255, 255, 255) # Default color
-                x_offset = panel_rect.left + 40 # Default indent for items
+                font_to_use = label_font  # Default font
+                color = (255, 255, 255)  # Default color
+                x_offset = panel_rect.left + 40  # Default indent for items
 
                 # Apply original formatting rules
-                if i == 0: # Title
+                if i == 0:  # Title
                     font_to_use = title_font
-                    color = (255, 255, 100) # Yellowish
+                    color = (255, 255, 100)  # Yellowish
                     # Center title within the panel
                     temp_surf = font_to_use.render(line, True, color)
                     x_offset = panel_rect.centerx - temp_surf.get_width() // 2
                 elif line == "Movement Controls:" or line == "Game Objective:":
-                    font_to_use = label_font # Using label font as header here
-                    color = (180, 180, 255) # Light blue/purple
-                    x_offset = panel_rect.left + 30 # Less indent for headers
+                    font_to_use = label_font  # Using label font as header here
+                    color = (180, 180, 255)  # Light blue/purple
+                    x_offset = panel_rect.left + 30  # Less indent for headers
                 elif line == "":
-                    y_offset += line_height_map[""] # Add space for blank line
+                    y_offset += line_height_map[""]  # Add space for blank line
                     continue
                 elif line == "Click anywhere to close":
-                     color = (200, 200, 200) # Dimmer color for footer
-                     # Center footer
-                     temp_surf = font_to_use.render(line, True, color)
-                     x_offset = panel_rect.centerx - temp_surf.get_width() // 2
-
+                    color = (200, 200, 200)  # Dimmer color for footer
+                    # Center footer
+                    temp_surf = font_to_use.render(line, True, color)
+                    x_offset = panel_rect.centerx - temp_surf.get_width() // 2
 
                 text_surf = font_to_use.render(line, True, color)
                 screen.blit(text_surf, (x_offset, y_offset))
@@ -589,15 +676,17 @@ def main():
                     "Your Server Code:", True, (200, 200, 200)
                 )
                 code_label_rect = code_label.get_rect(
-                    centerx=screen.get_width() // 2, y=100 # Original position
+                    centerx=screen.get_width() // 2, y=100  # Original position
                 )
                 screen.blit(code_label, code_label_rect)
 
                 # Use a slightly larger font for the code itself if desired
                 code_display_font = pygame.font.SysFont(constants.FONT_NAME, 30)
-                code_surface = code_display_font.render(server_code, True, (255, 255, 100))
+                code_surface = code_display_font.render(
+                    server_code, True, (255, 255, 100)
+                )
                 code_rect = code_surface.get_rect(
-                    centerx=screen.get_width() // 2, y=130 # Original position
+                    centerx=screen.get_width() // 2, y=130  # Original position
                 )
                 screen.blit(code_surface, code_rect)
 
@@ -608,10 +697,10 @@ def main():
                     "Enter Server Code:", True, (200, 200, 200)
                 )
                 input_label_rect = input_label.get_rect(
-                    centerx=screen.get_width() // 2, y=110 # Original position
+                    centerx=screen.get_width() // 2, y=110  # Original position
                 )
                 screen.blit(input_label, input_label_rect)
-                text_input.draw(screen) # Draw the input field itself
+                text_input.draw(screen)  # Draw the input field itself
 
                 # Draw server button only if server process isn't running
                 server_button.draw(screen)
@@ -621,17 +710,19 @@ def main():
             instructions_button.draw(screen)
 
         pygame.display.flip()
-        clock.tick(60) # Limit frame rate (optional but good practice)
+        clock.tick(60)  # Limit frame rate (optional but good practice)
         # --- End of Main Loop ---
 
     # --- Cleanup ---
     print("Main loop exited. Starting cleanup...")
     # Pass all handles to the cleanup function
-    cleanup_processes(server_process, server_stop_event, client_process, client_stop_event)
+    cleanup_processes(
+        server_process, server_stop_event, client_process, client_stop_event
+    )
 
     pygame.quit()
     print("Pygame quit.")
-    sys.exit(0) # Explicit exit
+    sys.exit(0)  # Explicit exit
 
 
 if __name__ == "__main__":
