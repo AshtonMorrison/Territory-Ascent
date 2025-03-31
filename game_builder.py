@@ -17,8 +17,7 @@ def build_exe(debug=False):
     # Basic command
     cmd = [
         "runner.py",  # Your main script
-        "--name=PlatformerGame",  # Name of the output executable
-        "--windowed",  # No console window when running the game
+        "--name=Territory Ascent",  # Name of the output executable
         "--noconfirm",  # Overwrite output without asking
         "--hidden-import=pygame",
         "--hidden-import=client.game",

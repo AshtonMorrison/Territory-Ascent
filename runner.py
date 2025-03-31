@@ -208,7 +208,7 @@ def main():
 
     show_instructions = False
     instructions_text = [
-        "How to Play (Placeholder):",
+        "How to Play Territory Ascent:",
         "",
         "Movement Controls:",
         "Use A and D keys to move left and right",
@@ -280,7 +280,7 @@ def main():
                 elif instructions_button.rect.collidepoint(event.pos):
                     show_instructions = True
 
-        title_surface = title_font.render("Placeholder Name", True, (255, 255, 255))
+        title_surface = title_font.render("Territory Ascent", True, (255, 255, 255))
         title_rect = title_surface.get_rect(centerx=screen.get_width() // 2, y=40)
         screen.blit(title_surface, title_rect)
 

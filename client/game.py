@@ -37,7 +37,7 @@ class GameClient:
 
         # Create initial screen
         self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
-        pygame.display.set_caption("Multiplayer Platformer")
+        pygame.display.set_caption("Territory Ascent")
 
         # Clock for FPS
         self.clock = pygame.time.Clock()
