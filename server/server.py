@@ -480,16 +480,6 @@ class GameServer:
         """Handles the end of a round."""
         self.winner.wins += 1
         if self.winner.wins < 3:
-            message = msgpack.packb({"type": "ROUND OVER", "winner": self.winner.color})
-            length_message = len(message).to_bytes(4, byteorder="big")
-            with self.lock:
-                for player in self.sprite_groups["players"]:
-                    try:
-                        player.conn.sendall(length_message + message)
-                    except:
-                        print(f"Failed to send to {player.addr}")
-                        player.conn.close()
-                        self.sprite_groups["players"].remove(player)
             self.reset_round()
         elif self.winner.wins >= 3:
             self.game_over()

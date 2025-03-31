@@ -339,13 +339,9 @@ class GameClient:
                         self.running = False
                         break
 
-                    elif update_data["type"] == "ROUND OVER":
-                        winner = update_data["winner"]
-                        print(f"Round Over! {winner} got the point!")
-
                     elif update_data["type"] == "GAME OVER":
                         self.winner = update_data["winner"]
-                        print(f"Game Over! {winner} wins!")
+                        print(f"Game Over! {self.winner} wins!")
 
                         # Record the time when the winner message was processed
                         self.winner_display_start_time = pygame.time.get_ticks()
@@ -365,7 +361,6 @@ class GameClient:
                         # Reset countdown
                         self.countdown = 999
 
-                        current_player_colors = set()
                         with self.lock:
                             current_player_colors = set(self.player_dict.keys())
                         updated_player_colors = set()
