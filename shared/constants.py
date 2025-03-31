@@ -17,4 +17,4 @@ DEFAULT_PLATFORM_COLOR = (120, 120, 120)
 Y_GRAVITY = 60 / FPS 
 
 # Font settings
-FONT_NAME = "Arial"
+FONT_NAME = "Segoe UI Symbol"

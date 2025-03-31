@@ -534,9 +534,9 @@ class GameClient:
 
                 # Draw checkmark if ready
                 if self.ready:
-                    checkmark_font = pygame.font.SysFont("Arial", 25)
+                    checkmark_font = pygame.font.SysFont(constants.FONT_NAME, 25)
                     checkmark_text = checkmark_font.render(
-                        "\u2713", True, (0, 255, 0)
+                        u"\u2713", True, (0, 255, 0)
                     )  # Unicode checkmark
                     checkmark_rect = checkmark_text.get_rect(
                         center=checkmark_box_rect.center
