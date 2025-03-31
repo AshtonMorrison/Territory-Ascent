@@ -3,6 +3,7 @@ import pygame.freetype
 import subprocess
 import sys
 import os
+import multiprocessing
 from server.server import get_ipv4, encode_ip
 from shared import constants
 
@@ -17,7 +18,7 @@ class TextInput:
         self.font = pygame.font.SysFont(constants.FONT_NAME, 28)
         self.cursor_visible = True
         self.cursor_timer = 0
-        self.cursor_blink_speed = 500  
+        self.cursor_blink_speed = 500
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -86,25 +87,107 @@ class Button:
         screen.blit(text_surface, text_rect)
 
 
+def server_process_entry(stop_event=None):
+    """Entry point for server process"""
+    from server.server import GameServer
+
+    server = GameServer()
+    if stop_event:
+        # Create a monitoring thread to check for stop event
+        def monitor_stop():
+            stop_event.wait()
+            server.running = False
+
+        import threading
+
+        monitor = threading.Thread(target=monitor_stop)
+        monitor.daemon = True
+        monitor.start()
+
+    server.start()
+
+
+def client_process_entry(code, stop_event=None):
+    """Entry point for client process"""
+    from client.game import GameClient
+
+    client = GameClient(code)
+    if stop_event:
+        # Create a monitoring thread to check for stop event
+        def monitor_stop():
+            stop_event.wait()
+            client.running = False
+
+        import threading
+
+        monitor = threading.Thread(target=monitor_stop)
+        monitor.daemon = True
+        monitor.start()
+
+    client.run()
+
+
 def run_server():
-    # Get the parent directory path
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    return subprocess.Popen([sys.executable, "-m", "server.server"], cwd=base_path)
+    """Start the server either as a subprocess or using multiprocessing"""
+    # Check if running as bundled executable
+    if getattr(sys, "frozen", False):
+        # We're running in a bundle - use multiprocessing
+        stop_event = multiprocessing.Event()
+        process = multiprocessing.Process(
+            target=server_process_entry, args=(stop_event,)
+        )
+        process.daemon = True
+        process.start()
+        return process, stop_event
+    else:
+        # We're running in a normal Python environment
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        return (
+            subprocess.Popen([sys.executable, "-m", "server.server"], cwd=base_path),
+            None,
+        )
 
 
 def run_client(code):
-    # Get the parent directory path
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    return subprocess.Popen([sys.executable, "-m", "client.game", code], cwd=base_path)
+    """Start the client either as a subprocess or using multiprocessing"""
+    if getattr(sys, "frozen", False):
+        # We're running in a bundle - use multiprocessing
+        stop_event = multiprocessing.Event()
+        process = multiprocessing.Process(
+            target=client_process_entry, args=(code, stop_event)
+        )
+        process.daemon = True
+        process.start()
+        return process, stop_event
+    else:
+        # We're running in a normal Python environment
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        return (
+            subprocess.Popen(
+                [sys.executable, "-m", "client.game", code], cwd=base_path
+            ),
+            None,
+        )
 
 
 def is_process_running(process):
+    """Check if a process is running"""
     if process is None:
         return False
-    return process.poll() is None
+    # Check if it's a subprocess.Popen object
+    if hasattr(process, "poll"):
+        return process.poll() is None
+    # Check if it's a multiprocessing process
+    elif hasattr(process, "is_alive"):
+        return process.is_alive()
+    return False
 
 
 def main():
+    # Initialize multiprocessing support
+    if getattr(sys, "frozen", False):
+        multiprocessing.freeze_support()
+
     pygame.init()
     screen = pygame.display.set_mode((500, 400))
     pygame.display.set_caption("Launcher")
@@ -119,6 +202,8 @@ def main():
 
     server_process = None
     client_process = None
+    server_stop_event = None
+    client_stop_event = None
     server_code = None
 
     show_instructions = False
@@ -138,7 +223,7 @@ def main():
 
     running = True
     while running:
-        screen.fill((20, 20, 30)) 
+        screen.fill((20, 20, 30))
         mouse_pos = pygame.mouse.get_pos()
 
         # Update UI elements
@@ -151,9 +236,14 @@ def main():
         if server_process and not is_process_running(server_process):
             server_process = None
             server_code = None
+            server_stop_event = None
             if client_process:
-                client_process.terminate()
+                if hasattr(client_process, "terminate"):
+                    client_process.terminate()
+                if client_stop_event:
+                    client_stop_event.set()
                 client_process = None
+                client_stop_event = None
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -162,33 +252,35 @@ def main():
             if show_instructions:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     show_instructions = False
-                continue 
+                continue
 
             result = text_input.handle_event(event)
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if server_button.rect.collidepoint(event.pos):
                     if not server_process:
-                        server_process = run_server()
+                        server_process, server_stop_event = run_server()
                         # Wait briefly for server to start
                         pygame.time.wait(1000)
                         # Get the server code
                         server_code = encode_ip(get_ipv4())
                         # Start client with the server code
-                        client_process = run_client(server_code)
+                        client_process, client_stop_event = run_client(server_code)
 
                 elif connect_button.rect.collidepoint(event.pos):
+                    code_to_use = ""
                     if text_input.text:
-                        client_process = run_client(text_input.text)
-                    if server_code is not None:
-                        client_process = run_client(server_code)
+                        code_to_use = text_input.text
+                    elif server_code is not None:
+                        code_to_use = server_code
+
+                    if code_to_use:
+                        client_process, client_stop_event = run_client(code_to_use)
 
                 elif instructions_button.rect.collidepoint(event.pos):
                     show_instructions = True
 
-        title_surface = title_font.render(
-            "Placeholder Name", True, (255, 255, 255)
-        )
+        title_surface = title_font.render("Placeholder Name", True, (255, 255, 255))
         title_rect = title_surface.get_rect(centerx=screen.get_width() // 2, y=40)
         screen.blit(title_surface, title_rect)
 
@@ -235,7 +327,7 @@ def main():
         else:
             # Draw regular UI elements
             if server_code:
-                # Display server code 
+                # Display server code
                 code_label = label_font.render(
                     "Your Server Code:", True, (200, 200, 200)
                 )
@@ -269,10 +361,19 @@ def main():
 
         pygame.display.flip()
 
+    # Clean up processes before exiting
     if server_process:
-        server_process.terminate()
+        if hasattr(server_process, "terminate"):
+            server_process.terminate()
+        if server_stop_event:
+            server_stop_event.set()
+
     if client_process:
-        client_process.terminate()
+        if hasattr(client_process, "terminate"):
+            client_process.terminate()
+        if client_stop_event:
+            client_stop_event.set()
+
     pygame.quit()
 
 
